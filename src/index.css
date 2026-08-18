@@ -1,1 +1,126 @@
 @import "tailwindcss";
+
+@theme {
+  --font-display: "Unbounded", "Golos Text", sans-serif;
+  --font-body: "Golos Text", "Segoe UI", sans-serif;
+
+  --color-paper: #edf1e6;
+  --color-card: #fafbf4;
+  --color-field: #fdfdfa;
+
+  --color-ink: #17281e;
+  --color-soft: #57675a;
+  --color-faint: #8a978b;
+  --color-line: rgba(23, 40, 30, 0.14);
+  --color-linesoft: rgba(23, 40, 30, 0.07);
+
+  --color-leaf: #256b45;
+  --color-leafdeep: #17452d;
+  --color-leafwash: #e0ecdc;
+  --color-carrot: #e4572e;
+  --color-carrotwash: #fbe3d7;
+  --color-amber: #c9880f;
+  --color-amberwash: #f6ead0;
+  --color-teal: #2b7a9e;
+  --color-tealwash: #dcedf4;
+  --color-water: #3e7bc0;
+  --color-waterwash: #e0eaf7;
+  --color-danger: #c23d3d;
+  --color-dangerwash: #f6e0de;
+  --color-paperink: #f4f7ef;
+}
+
+html {
+  font-family: var(--font-body);
+}
+
+body {
+  color: var(--color-ink);
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(1100px 520px at 88% -10%, rgba(37, 107, 69, 0.11), transparent 62%),
+    radial-gradient(900px 500px at -12% 108%, rgba(228, 87, 46, 0.09), transparent 60%),
+    radial-gradient(rgba(23, 40, 30, 0.055) 1px, transparent 1.4px);
+  background-size: auto, auto, 23px 23px;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(37, 107, 69, 0.22);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-leaf);
+  outline-offset: 2px;
+}
+
+/* ---------- reusable pieces ---------- */
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  box-shadow: 5px 5px 0 rgba(23, 40, 30, 0.06);
+}
+
+.hard-sm { box-shadow: 3px 3px 0 rgba(23, 40, 30, 0.1); }
+
+.btn-press {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.btn-press:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 rgba(23, 40, 30, 0.14); }
+.btn-press:active { transform: translate(2px, 2px); box-shadow: 0 0 0 rgba(23, 40, 30, 0.14); }
+
+.field {
+  width: 100%;
+  background: var(--color-field);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--color-ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.field::placeholder { color: var(--color-faint); }
+.field:focus {
+  outline: none;
+  border-color: var(--color-leaf);
+  box-shadow: 0 0 0 3px rgba(37, 107, 69, 0.16);
+}
+.field-invalid {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px rgba(194, 61, 61, 0.14);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+input[type="range"] { accent-color: var(--color-leaf); }
+
+* { scrollbar-width: thin; scrollbar-color: rgba(23, 40, 30, 0.25) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(23, 40, 30, 0.18); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- motion ---------- */
+@keyframes fadein { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(16px) scale(0.985); } }
+@keyframes slidein { from { opacity: 0; transform: translateY(7px); } }
+@keyframes growup { from { transform: scaleY(0); } }
+@keyframes popdrop { 0% { transform: scale(0.5); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes toastin { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
+
+.animate-fadein { animation: fadein 0.22s ease both; }
+.animate-rise { animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-in { animation: slidein 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bar-grow { transform-origin: bottom; animation: growup 0.65s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.drop-pop { animation: popdrop 0.3s ease both; }
+.toast-in { animation: toastin 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
