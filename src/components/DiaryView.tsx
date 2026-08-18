@@ -11,14 +11,6 @@ const MEAL_DOT: Record<Meal, string> = {
   snack: "var(--color-carrot)",
 };
 
-function plural(n: number, one: string, few: string, many: string) {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
-  return many;
-}
-
 export function DiaryView({
   dayKey,
   day,
@@ -47,10 +39,8 @@ export function DiaryView({
   const ringColor =
     ratio > 1.05 ? "var(--color-carrot)" : ratio > 0.92 ? "var(--color-amber)" : "var(--color-leaf)";
   const water = day?.water ?? 0;
-  const [openMeal, setOpenMeal] = useState<Meal | null>(null);
 
-  const mealEntries = (meal: Meal) =>
-    (day?.entries ?? []).filter((e) => e.meal === meal).sort((a, b) => a.addedAt - b.addedAt);
+  const [modal, setModal] = useState<{ meal: Meal; items: Entry[] } | null>(null);
 
   return (
     <div key={dayKey} className="anim-in">
@@ -92,9 +82,9 @@ export function DiaryView({
         )}
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[360px_1fr]">
-        {/* сводка дня */}
-        <section className="card h-fit p-5">
+      <div className="mt-5 grid content-start gap-5 lg:grid-cols-[360px_1fr]">
+        {/* квадрат КБЖУ */}
+        <section className="card h-fit p-5 lg:sticky lg:top-24">
           <div className="flex items-center gap-5">
             <Ring value={totals.kcal} max={goals.kcal} color={ringColor}>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">съедено</span>
@@ -112,11 +102,9 @@ export function DiaryView({
               >
                 {over ? `Сверх цели ${fmt(-remaining)} ккал` : `Осталось ${fmt(remaining)} ккал`}
               </div>
-              {totals.count === 0 && (
-                <p className="mt-2 text-xs leading-relaxed text-soft">
-                  Дневник пуст — добавьте первый приём пищи.
-                </p>
-              )}
+              <p className="mt-2 text-xs leading-relaxed text-soft">
+                {totals.count === 0 ? "Дневник пуст — добавьте первый приём пищи." : "Цель по калориям на день"}
+              </p>
             </div>
           </div>
           <div className="mt-5 space-y-3">
@@ -126,207 +114,227 @@ export function DiaryView({
           </div>
         </section>
 
-        {/* приёмы пищи — 4 плитки */}
-        <div className="grid grid-cols-2 content-start gap-3 lg:gap-4">
-          {MEALS.map((m) => {
-            const entries = mealEntries(m.id);
-            const kcal = entries.reduce((s, e) => s + e.kcal, 0);
-            return (
-              <MealTile
-                key={m.id}
-                meal={m.id}
-                label={m.label}
-                kcal={kcal}
-                onOpen={() => setOpenMeal(m.id)}
-              />
-            );
-          })}
+        {/* приёмы пищи + вода */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <h2 className="font-display text-[15px] font-extrabold">Приёмы пищи</h2>
+
+          <div className="grid grid-cols-2 gap-3">
+            {MEALS.map((m) => {
+              const items = (day?.entries ?? []).filter((e) => e.meal === m.id);
+              const sub = items.reduce((s, e) => s + e.kcal, 0);
+              return (
+                <MealTile
+                  key={m.id}
+                  meal={m.id}
+                  label={m.label}
+                  hint={m.hint}
+                  kcal={sub}
+                  count={items.length}
+                  onOpen={() => setModal({ meal: m.id, items: [...items].sort((a, b) => a.addedAt - b.addedAt) })}
+                  onAdd={() => onAdd(m.id)}
+                />
+              );
+            })}
+          </div>
+
+          {/* вода — в самом низу ленты */}
+          <section className="card p-5">
+            <div className="flex items-baseline justify-between">
+              <h3 className="font-display text-[13px] font-bold">Вода</h3>
+              <span className="text-xs font-semibold text-water tabular-nums">{water * 250} мл</span>
+            </div>
+            <div className="mt-3 grid grid-cols-8 gap-1.5">
+              {Array.from({ length: 8 }, (_, i) => {
+                const filled = i < water;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => onWater(i + 1 === water ? i : i + 1)}
+                    aria-label={`Стакан ${i + 1}`}
+                    className={`btn-press grid aspect-square place-items-center rounded-xl border transition-colors ${
+                      filled
+                        ? "border-water bg-waterwash text-water"
+                        : "border-line bg-field text-faint hover:text-water"
+                    }`}
+                  >
+                    <span key={`${i}-${filled}`} className={filled ? "drop-pop" : ""}>
+                      <IDrop width={18} height={18} fill={filled ? "var(--color-water)" : "none"} strokeWidth={1.8} />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2.5 text-[11px] text-faint">
+              {water} из 8 стаканов · кликните, чтобы отметить
+            </p>
+          </section>
         </div>
       </div>
 
-      {/* вода — в самом низу ленты */}
-      <section className="card mt-5 p-5">
-        <div className="flex items-baseline justify-between">
-          <h3 className="font-display text-[13px] font-bold">Вода</h3>
-          <span className="text-xs font-semibold text-water tabular-nums">{water * 250} мл</span>
-        </div>
-        <div className="mt-3 grid grid-cols-8 gap-1.5">
-          {Array.from({ length: 8 }, (_, i) => {
-            const filled = i < water;
-            return (
-              <button
-                key={i}
-                onClick={() => onWater(i + 1 === water ? i : i + 1)}
-                aria-label={`Стакан ${i + 1}`}
-                className={`btn-press grid aspect-square place-items-center rounded-xl border transition-colors ${
-                  filled
-                    ? "border-water bg-waterwash text-water"
-                    : "border-line bg-field text-faint hover:text-water"
-                }`}
-              >
-                <span key={`${i}-${filled}`} className={filled ? "drop-pop" : ""}>
-                  <IDrop width={18} height={18} fill={filled ? "var(--color-water)" : "none"} strokeWidth={1.8} />
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-2.5 text-[11px] text-faint">
-          {water} из 8 стаканов · кликните, чтобы отметить
-        </p>
-      </section>
-
-      {openMeal && (
-        <MealSheet
-          meal={openMeal}
-          entries={mealEntries(openMeal)}
-          onClose={() => setOpenMeal(null)}
-          onAdd={() => onAdd(openMeal)}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+      {/* список продуктов приёма пищи */}
+      {modal && (
+        <Modal
+          title={MEALS.find((m) => m.id === modal.meal)?.label ?? ""}
+          subtitle={`${modal.items.length} ${plural(modal.items.length, "продукт", "продукта", "продуктов")} · ${fmt(
+            modal.items.reduce((s, e) => s + e.kcal, 0),
+          )} ккал`}
+          onClose={() => setModal(null)}
+        >
+          {modal.items.length === 0 ? (
+            <button
+              onClick={() => {
+                const meal = modal.meal;
+                setModal(null);
+                onAdd(meal);
+              }}
+              className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-line py-10 text-faint transition-colors hover:border-leaf/50 hover:text-leaf"
+            >
+              <IPlus width={20} height={20} />
+              <span className="text-sm font-semibold">Добавить продукт</span>
+            </button>
+          ) : (
+            <ul className="space-y-1">
+              {modal.items.map((e) => (
+                <li
+                  key={e.id}
+                  className="anim-in flex items-center gap-2 rounded-xl px-2 py-2.5 transition-colors hover:bg-field"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="truncate text-sm font-semibold">{e.name}</span>
+                      <span className="shrink-0 text-[11px] text-faint tabular-nums">{e.grams} г</span>
+                    </div>
+                    <div className="mt-0.5 flex gap-2.5 text-[11px] tabular-nums">
+                      <span className="text-leaf">Б {e.p}</span>
+                      <span className="text-amber">Ж {e.f}</span>
+                      <span className="text-teal">У {e.c}</span>
+                    </div>
+                  </div>
+                  <span className="font-display text-sm font-bold text-carrot tabular-nums">{e.kcal}</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => onEdit(e)}
+                      aria-label="Изменить"
+                      className="btn-press grid size-8 place-items-center rounded-lg border border-line bg-card text-soft hover:text-ink"
+                    >
+                      <IPencil width={13} height={13} />
+                    </button>
+                    <ArmDelete onDelete={() => onDelete(e)} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            onClick={() => {
+              const meal = modal.meal;
+              setModal(null);
+              onAdd(meal);
+            }}
+            className="btn-press mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-leaf px-4 py-3 text-sm font-bold text-paperink"
+          >
+            <IPlus width={16} height={16} /> Добавить продукт
+          </button>
+        </Modal>
       )}
     </div>
   );
 }
 
-/* ---------- плитка приёма пищи ---------- */
+function plural(n: number, one: string, few: string, many: string) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+/* ---------- квадратная плитка приёма пищи ---------- */
+
 function MealTile({
   meal,
   label,
+  hint,
   kcal,
+  count,
   onOpen,
+  onAdd,
 }: {
   meal: Meal;
   label: string;
+  hint: string;
   kcal: number;
+  count: number;
   onOpen: () => void;
+  onAdd: () => void;
 }) {
   return (
-    <button
-      onClick={onOpen}
-      aria-label={`${label}: ${fmt(kcal)} ккал. Открыть список продуктов`}
-      className="card btn-press relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center"
-    >
-      <span className="absolute left-4 top-4 flex items-center gap-1.5 text-[13px] font-bold text-soft">
-        <span className="size-2 rounded-full" style={{ background: MEAL_DOT[meal] }} />
-        {label}
-      </span>
+    <div className="card group relative aspect-square overflow-hidden p-3.5 transition-transform duration-200 hover:-translate-y-0.5 sm:p-4">
+      {/* вся плитка кликабельна */}
+      <button onClick={onOpen} aria-label={`Открыть ${label}`} className="absolute inset-0" />
+
       <span
-        className={`font-display text-[27px] font-extrabold leading-none tabular-nums sm:text-3xl ${
-          kcal > 0 ? "" : "text-faint/60"
-        }`}
+        className="pointer-events-none absolute left-3.5 top-[19px] size-2.5 rounded-full sm:left-4"
+        style={{ background: MEAL_DOT[meal] }}
+      />
+      <button
+        onClick={onAdd}
+        aria-label={`Добавить в ${label.toLowerCase()}`}
+        className="btn-press absolute right-2.5 top-2.5 z-10 grid size-8 place-items-center rounded-lg bg-leaf text-paperink sm:right-3 sm:top-3"
       >
-        {fmt(kcal)}
-      </span>
-      <span className="text-[11px] font-semibold text-faint">ккал</span>
-      <IChevR width={15} height={15} className="absolute bottom-3.5 right-3.5 text-faint/70" />
-    </button>
+        <IPlus width={15} height={15} />
+      </button>
+
+      <div className="pointer-events-none relative flex h-full flex-col pl-4 pr-8 pt-0.5">
+        <h3 className="truncate font-display text-[13px] font-bold leading-tight sm:text-sm">{label}</h3>
+
+        <div className="flex flex-1 flex-col items-center justify-center gap-0.5">
+          <span
+            className={`font-display text-[26px] font-extrabold leading-none tabular-nums transition-colors sm:text-3xl ${
+              kcal > 0 ? "text-carrot" : "text-line"
+            }`}
+          >
+            {kcal > 0 ? fmt(kcal) : "0"}
+          </span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">ккал</span>
+        </div>
+
+        <p className="truncate text-center text-[11px] font-medium text-faint">
+          {count > 0
+            ? `${count} ${plural(count, "продукт", "продукта", "продуктов")}`
+            : hint}
+        </p>
+      </div>
+    </div>
   );
 }
 
-/* ---------- экран приёма пищи ---------- */
-function MealSheet({
-  meal,
-  entries,
-  onClose,
-  onAdd,
-  onEdit,
-  onDelete,
-}: {
-  meal: Meal;
-  entries: Entry[];
-  onClose: () => void;
-  onAdd: () => void;
-  onEdit: (e: Entry) => void;
-  onDelete: (e: Entry) => void;
-}) {
-  const meta = MEALS.find((m) => m.id === meal)!;
-  const [armed, setArmed] = useState<string | null>(null);
+/* ---------- кнопка удаления с подтверждением ---------- */
+
+function ArmDelete({ onDelete }: { onDelete: () => void }) {
+  const [armed, setArmed] = useState(false);
   const timer = useRef<number | null>(null);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
-
-  const subtotal = entries.reduce((s, e) => s + e.kcal, 0);
-
-  const armDelete = (e: Entry) => {
-    if (armed === e.id) {
-      onDelete(e);
-      setArmed(null);
+  const click = () => {
+    if (armed) {
+      onDelete();
       return;
     }
-    setArmed(e.id);
+    setArmed(true);
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setArmed(null), 2600);
+    timer.current = window.setTimeout(() => setArmed(false), 2600);
   };
-
   return (
-    <Modal
-      title={meta.label}
-      subtitle={
-        entries.length > 0
-          ? `${entries.length} ${plural(entries.length, "продукт", "продукта", "продуктов")} · ${fmt(subtotal)} ккал`
-          : "пока пусто"
-      }
-      onClose={onClose}
+    <button
+      onClick={click}
+      aria-label="Удалить"
+      className={`btn-press grid h-8 place-items-center rounded-lg border px-2 text-[11px] font-bold ${
+        armed
+          ? "border-danger bg-danger text-paperink"
+          : "w-8 border-line bg-card text-soft hover:text-danger"
+      }`}
     >
-      {entries.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-8 text-center">
-          <span className="grid size-12 place-items-center rounded-2xl bg-paper text-faint">
-            <IPlus width={22} height={22} />
-          </span>
-          <p className="text-sm font-semibold">В «{meta.label.toLowerCase()}» пока пусто</p>
-          <p className="text-xs text-faint">Добавьте блюдо — калории появятся на плитке</p>
-        </div>
-      ) : (
-        <ul className="space-y-1">
-          {entries.map((e) => (
-            <li
-              key={e.id}
-              className="anim-in flex items-center gap-2 rounded-xl px-2 py-2 transition-colors hover:bg-field"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate text-sm font-semibold">{e.name}</span>
-                  <span className="shrink-0 text-[11px] text-faint tabular-nums">{e.grams} г</span>
-                </div>
-                <div className="mt-0.5 flex gap-2.5 text-[11px] tabular-nums">
-                  <span className="text-leaf">Б {e.p}</span>
-                  <span className="text-amber">Ж {e.f}</span>
-                  <span className="text-teal">У {e.c}</span>
-                </div>
-              </div>
-              <span className="font-display text-sm font-bold text-carrot tabular-nums">{e.kcal}</span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => onEdit(e)}
-                  aria-label="Изменить"
-                  className="btn-press grid size-8 place-items-center rounded-lg border border-line bg-card text-soft hover:text-ink"
-                >
-                  <IPencil width={14} height={14} />
-                </button>
-                <button
-                  onClick={() => armDelete(e)}
-                  aria-label="Удалить"
-                  className={`btn-press grid h-8 place-items-center rounded-lg border px-1.5 text-[11px] font-bold ${
-                    armed === e.id
-                      ? "border-danger bg-danger text-paperink"
-                      : "w-8 border-line bg-card text-soft hover:text-danger"
-                  }`}
-                >
-                  {armed === e.id ? "Точно?" : <ITrash width={14} height={14} />}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <button
-        onClick={onAdd}
-        className="btn-press mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-leaf px-5 py-3 text-sm font-bold text-paperink"
-      >
-        <IPlus width={16} height={16} /> Добавить в «{meta.label}»
-      </button>
-    </Modal>
+      {armed ? "Точно?" : <ITrash width={13} height={13} />}
+    </button>
   );
 }
