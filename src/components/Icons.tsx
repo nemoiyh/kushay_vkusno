@@ -78,6 +78,15 @@ export const ITrendDown = (p: P) => (
 export const ITrendUp = (p: P) => (
   <svg {...base(p)}><path d="m22 7-7.5 7.5-4-4L2 19" /><path d="M22 13v-6h-6" /></svg>
 );
+export const IBarcode = (p: P) => (
+  <svg {...base(p)}><path d="M4 6v12M8 6v12M11 6v12M15 6v12M20 6v12" /><path d="M17.5 6v12" strokeWidth={3} /></svg>
+);
+export const ICamera = (p: P) => (
+  <svg {...base(p)}><path d="M14.5 4h-5L7.8 6.2A1 1 0 0 1 7 6.6H4a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8.6a2 2 0 0 0-2-2h-3a1 1 0 0 1-.8-.4L14.5 4Z" /><circle cx="12" cy="13" r="3.5" /></svg>
+);
+export const IStore = (p: P) => (
+  <svg {...base(p)}><path d="M4 10v10h16V10" /><path d="M3 6.5 4.5 3h15L21 6.5a2.5 2.5 0 0 1-4.5 1.4A2.5 2.5 0 0 1 12 7.9a2.5 2.5 0 0 1-4.5 0A2.5 2.5 0 0 1 3 6.5Z" /><path d="M9 20v-5h6v5" /></svg>
+);
 export const IClock = (p: P) => (
   <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
 );

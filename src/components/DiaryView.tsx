@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import type { DayLog, Entry, Goals, Meal } from "../types";
 import { MEALS, dayTotals, fmt, humanDate, todayKey } from "../lib/store";
 import { AnimatedNumber, MacroBar, Ring } from "./ui";
-import { IChevL, IChevR, IClock, IDrop, IPencil, IPlus, ITrash } from "./Icons";
+import { IBarcode, IChevL, IChevR, IClock, IDrop, IPencil, IPlus, ITrash } from "./Icons";
 
 const MEAL_DOT: Record<Meal, string> = {
   breakfast: "var(--color-amber)",
@@ -20,6 +20,7 @@ export function DiaryView({
   onEdit,
   onDelete,
   onWater,
+  onScan,
 }: {
   dayKey: string;
   day?: DayLog;
@@ -29,6 +30,7 @@ export function DiaryView({
   onEdit: (entry: Entry) => void;
   onDelete: (entry: Entry) => void;
   onWater: (n: number) => void;
+  onScan: () => void;
 }) {
   const totals = useMemo(() => dayTotals(day), [day]);
   const isToday = dayKey === todayKey();
@@ -73,6 +75,13 @@ export function DiaryView({
             Вернуться к сегодня
           </button>
         )}
+        <button
+          onClick={onScan}
+          className="btn-press flex items-center gap-2 rounded-xl bg-ink px-3.5 py-2.5 text-[13px] font-bold text-paperink"
+          title="Добавить продукт по штрихкоду с упаковки"
+        >
+          <IBarcode width={16} height={16} /> Сканировать
+        </button>
         {isToday && (
           <span className="ml-auto hidden items-center gap-1.5 text-xs font-medium text-faint sm:flex">
             <IClock width={14} height={14} /> записи сохраняются автоматически

@@ -12,6 +12,8 @@ export interface Food {
   f: number;
   c: number;
   unit?: { label: string; grams: number };
+  /** штрихкод EAN-13 / EAN-8, если известен */
+  barcode?: string;
 }
 
 export interface Entry {
@@ -57,6 +59,8 @@ export interface AppData {
   goals: Goals;
   profile: Profile;
   weights: WeightEntry[];
+  /** продукты пользователя (в т. ч. созданные по штрихкоду) */
+  customFoods: Food[];
 }
 
 export type ToastKind = "success" | "error" | "info";

@@ -174,6 +174,7 @@ function seedState(): AppData {
     goals: { kcal: 2000, p: 100, f: 67, c: 200 },
     profile: { sex: "male", age: 28, height: 178, weight: 81.5, activity: 1.375 },
     weights: [w(-6, 82.3), w(-4, 81.9), w(-2, 81.6), w(-1, 81.4)],
+    customFoods: [],
   };
 }
 
@@ -182,7 +183,10 @@ export function loadState(): AppData {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as AppData;
-      if (parsed && parsed.days && parsed.goals && parsed.profile) return parsed;
+      if (parsed && parsed.days && parsed.goals && parsed.profile) {
+        // миграция со старых версий данных
+        return { ...parsed, customFoods: parsed.customFoods ?? [] };
+      }
     }
   } catch {
     /* повреждённые данные — начнём заново */

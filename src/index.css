@@ -110,6 +110,12 @@ input[type="range"] { accent-color: var(--color-leaf); }
 @keyframes growup { from { transform: scaleY(0); } }
 @keyframes popdrop { 0% { transform: scale(0.5); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
 @keyframes toastin { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
+@keyframes scanline {
+  0% { top: 6%; }
+  50% { top: 90%; }
+  100% { top: 6%; }
+}
+.scanline { animation: scanline 2.2s ease-in-out infinite; }
 
 .animate-fadein { animation: fadein 0.22s ease both; }
 .animate-rise { animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }

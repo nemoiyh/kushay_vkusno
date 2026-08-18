@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { AppData, Entry, Food, Goals, Meal, Profile, ToastItem, ToastKind, View } from "./types";
 import {
   STORAGE_KEY,
@@ -13,6 +13,8 @@ import {
   todayKey,
   uid,
 } from "./lib/store";
+import { FOODS } from "./data/foods";
+import { fetchOffProduct } from "./lib/off";
 import { AnimatedNumber, ToastStack } from "./components/ui";
 import {
   IApple,
@@ -27,6 +29,11 @@ import { DatabaseView } from "./components/DatabaseView";
 import { StatsView } from "./components/StatsView";
 import { GoalsView } from "./components/GoalsView";
 import { AddEntryModal, type EntryDraftInput } from "./components/AddEntryModal";
+
+// сканер штрихкода грузится отдельным чанком — не утяжеляет первый экран
+const BarcodeModal = lazy(() =>
+  import("./components/BarcodeModal").then((m) => ({ default: m.BarcodeModal })),
+);
 
 const NAV: { id: View; label: string; icon: typeof IBook }[] = [
   { id: "diary", label: "Дневник", icon: IBook },
@@ -48,6 +55,7 @@ export default function App() {
   const [dayKey, setDayKey] = useState(todayKey());
   const [draft, setDraft] = useState<(EntryDraftInput & { dateKey: string; ts: number }) | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => saveState(data), [data]);
 
@@ -191,6 +199,52 @@ export default function App() {
     setDraft({ dateKey: todayKey(), meal: defaultMealByHour(), food, ts: Date.now() });
   };
 
+  /* ------- штрихкоды ------- */
+
+  const handleScanCode = useCallback(
+    async (code: string) => {
+      setScanOpen(false);
+      const local =
+        data.customFoods.find((f) => f.barcode === code) ?? FOODS.find((f) => f.barcode === code);
+      if (local) {
+        setDayKey(todayKey());
+        setDraft({ dateKey: todayKey(), meal: defaultMealByHour(), food: local, ts: Date.now() });
+        toast(`Найдено: ${local.name}`);
+        return;
+      }
+      toast(`Штрихкод ${code}: ищем в Open Food Facts…`, "info");
+      const off = await fetchOffProduct(code);
+      setDayKey(todayKey());
+      if (off) {
+        setDraft({ dateKey: todayKey(), meal: defaultMealByHour(), food: off, ts: Date.now() });
+        toast(`Найдено в Open Food Facts: ${off.name}`);
+      } else {
+        setDraft({
+          dateKey: todayKey(),
+          meal: defaultMealByHour(),
+          barcode: code,
+          ts: Date.now(),
+        });
+        toast(`Штрихкод ${code} не найден — заполните вручную`, "info");
+      }
+    },
+    [data.customFoods, toast],
+  );
+
+  const saveCustomFood = useCallback((f: Omit<Food, "id">): Food => {
+    const food: Food = { ...f, id: uid() };
+    setData((prev) => {
+      const rest = prev.customFoods.filter((x) => !(f.barcode && x.barcode === f.barcode));
+      return { ...prev, customFoods: [food, ...rest] };
+    });
+    return food;
+  }, []);
+
+  const deleteCustomFood = useCallback((id: string) => {
+    setData((prev) => ({ ...prev, customFoods: prev.customFoods.filter((f) => f.id !== id) }));
+    toast("Продукт удалён из «Мои продукты»", "info");
+  }, [toast]);
+
   /* ------- рендер ------- */
 
   return (
@@ -271,7 +325,8 @@ export default function App() {
               </div>
             </div>
             <p className="px-1 text-[10px] leading-relaxed text-faint">
-              Данные хранятся локально в браузере. База — {fmt(67)} продуктов.
+              Данные хранятся локально в браузере. База — {fmt(FOODS.length)} продуктов, включая
+              каталог «Перекрёстка».
             </p>
           </div>
         </aside>
@@ -292,9 +347,16 @@ export default function App() {
                 onEdit={(entry) => setDraft({ dateKey: dayKey, meal: entry.meal, entry, ts: Date.now() })}
                 onDelete={handleDelete}
                 onWater={(n) => upsertDay(dayKey, (d) => ({ ...d, water: n }))}
+                onScan={() => setScanOpen(true)}
               />
             )}
-            {view === "foods" && <DatabaseView onPick={openPick} />}
+            {view === "foods" && (
+              <DatabaseView
+                onPick={openPick}
+                customFoods={data.customFoods}
+                onDeleteCustomFood={deleteCustomFood}
+              />
+            )}
             {view === "stats" && <StatsView data={data} />}
             {view === "goals" && (
               <GoalsView
@@ -351,7 +413,15 @@ export default function App() {
           input={draft}
           onClose={() => setDraft(null)}
           onSave={handleSave}
+          customFoods={data.customFoods}
+          onSaveCustomFood={saveCustomFood}
         />
+      )}
+
+      {scanOpen && (
+        <Suspense fallback={null}>
+          <BarcodeModal onCode={handleScanCode} onClose={() => setScanOpen(false)} />
+        </Suspense>
       )}
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
