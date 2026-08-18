@@ -1,5 +1,5 @@
-/* Съедено — service worker: офлайн-режим и кэш оболочки */
-const CACHE = "seyedeno-v1";
+/* Кушай вкусно — service worker: офлайн-режим и кэш оболочки */
+const CACHE = "kushai-vkusno-v1";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

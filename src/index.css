@@ -4,30 +4,30 @@
   --font-display: "Unbounded", "Golos Text", sans-serif;
   --font-body: "Golos Text", "Segoe UI", sans-serif;
 
-  --color-paper: #edf1e6;
-  --color-card: #fafbf4;
-  --color-field: #fdfdfa;
+  --color-paper: #e9f0f0;
+  --color-card: #f8fbfb;
+  --color-field: #fcfdfd;
 
-  --color-ink: #17281e;
-  --color-soft: #57675a;
-  --color-faint: #8a978b;
-  --color-line: rgba(23, 40, 30, 0.14);
-  --color-linesoft: rgba(23, 40, 30, 0.07);
+  --color-ink: #13262b;
+  --color-soft: #50676c;
+  --color-faint: #85979b;
+  --color-line: rgba(19, 38, 43, 0.14);
+  --color-linesoft: rgba(19, 38, 43, 0.07);
 
-  --color-leaf: #256b45;
-  --color-leafdeep: #17452d;
-  --color-leafwash: #e0ecdc;
+  --color-leaf: #0f7d8a;
+  --color-leafdeep: #0a4f5a;
+  --color-leafwash: #d9ecef;
   --color-carrot: #e4572e;
   --color-carrotwash: #fbe3d7;
   --color-amber: #c9880f;
   --color-amberwash: #f6ead0;
-  --color-teal: #2b7a9e;
-  --color-tealwash: #dcedf4;
+  --color-teal: #2f6fb4;
+  --color-tealwash: #dde8f5;
   --color-water: #3e7bc0;
   --color-waterwash: #e0eaf7;
   --color-danger: #c23d3d;
   --color-dangerwash: #f6e0de;
-  --color-paperink: #f4f7ef;
+  --color-paperink: #f2f7f7;
 }
 
 html {
@@ -38,9 +38,9 @@ body {
   color: var(--color-ink);
   background-color: var(--color-paper);
   background-image:
-    radial-gradient(1100px 520px at 88% -10%, rgba(37, 107, 69, 0.11), transparent 62%),
-    radial-gradient(900px 500px at -12% 108%, rgba(228, 87, 46, 0.09), transparent 60%),
-    radial-gradient(rgba(23, 40, 30, 0.055) 1px, transparent 1.4px);
+    radial-gradient(1100px 520px at 88% -10%, rgba(15, 125, 138, 0.13), transparent 62%),
+    radial-gradient(900px 500px at -12% 108%, rgba(228, 87, 46, 0.08), transparent 60%),
+    radial-gradient(rgba(19, 38, 43, 0.055) 1px, transparent 1.4px);
   background-size: auto, auto, 23px 23px;
   background-attachment: fixed;
   min-height: 100dvh;

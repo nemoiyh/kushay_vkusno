@@ -336,12 +336,12 @@ export function GoalsView({
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
             <img
               src={APP_ICON_URL}
-              alt="Иконка приложения «Съедено»"
+              alt="Иконка приложения «Кушай вкусно»"
               className="size-20 shrink-0 rounded-[22%] border border-line object-cover hard-sm"
             />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-display text-[13px] font-bold">Приложение «Съедено»</h2>
+                <h2 className="font-display text-[13px] font-bold">Приложение «Кушай вкусно»</h2>
                 <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] font-bold text-faint">
                   v1.0.0 · офлайн · без аккаунта
                 </span>
@@ -353,7 +353,7 @@ export function GoalsView({
                 </p>
               ) : (
                 <p className="mt-2 max-w-2xl text-xs leading-relaxed text-soft">
-                  «Съедено» — PWA: ставится на домашний экран как обычное приложение, открывается в
+                  «Кушай вкусно» — PWA: ставится на домашний экран как обычное приложение, открывается в
                   полноэкранном режиме и работает без интернета. Для публикации в App Store проект
                   упаковывается в нативную оболочку через Capacitor — всё уже настроено, шаги в README.md.
                 </p>

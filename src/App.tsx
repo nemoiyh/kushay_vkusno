@@ -173,7 +173,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "seyedeno-data.json";
+      a.download = "kushai-vkusno-data.json";
       a.click();
       URL.revokeObjectURL(url);
       toast("Файл с данными выгружен");
@@ -254,7 +254,7 @@ export default function App() {
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
           <LogoMark size={36} />
           <div className="leading-none">
-            <div className="font-display text-[15px] font-extrabold tracking-wide">СЪЕДЕНО</div>
+            <div className="font-display text-[14px] font-extrabold tracking-wide">КУШАЙ ВКУСНО</div>
             <div className="mt-0.5 text-[11px] font-medium text-faint">дневник питания</div>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -275,7 +275,7 @@ export default function App() {
           <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 anim-in sm:px-6">
             <IApple width={17} height={17} className="shrink-0 text-water" />
             <p className="flex-1 text-xs leading-snug sm:text-[13px]">
-              Поставьте «Съедено» на домашний экран: <b>«Поделиться»</b> → <b>«На экран „Домой"»</b> —
+              Поставьте «Кушай вкусно» на домашний экран: <b>«Поделиться»</b> → <b>«На экран „Домой"»</b> —
               запуск в одно касание, работает офлайн.
             </p>
             <button

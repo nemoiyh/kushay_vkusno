@@ -1,14 +1,14 @@
 {
-  "name": "Съедено — дневник питания и счётчик калорий",
-  "short_name": "Съедено",
+  "name": "Кушай вкусно — дневник питания и счётчик калорий",
+  "short_name": "Кушай вкусно",
   "description": "Дневник питания: калории, БЖУ, вода, вес и статистика. Работает офлайн, данные хранятся на устройстве.",
   "lang": "ru",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#edf1e6",
-  "theme_color": "#edf1e6",
+  "background_color": "#e9f0f0",
+  "theme_color": "#e9f0f0",
   "categories": ["health", "fitness", "lifestyle"],
   "icons": [
     {
