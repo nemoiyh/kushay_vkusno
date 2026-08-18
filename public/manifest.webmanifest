@@ -1,0 +1,27 @@
+{
+  "name": "Съедено — дневник питания и счётчик калорий",
+  "short_name": "Съедено",
+  "description": "Дневник питания: калории, БЖУ, вода, вес и статистика. Работает офлайн, данные хранятся на устройстве.",
+  "lang": "ru",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#edf1e6",
+  "theme_color": "#edf1e6",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    {
+      "src": "https://image.qwenlm.ai/generated-images/d3f7e042-ac15-4531-8403-df7eba42d1e0/_result.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://image.qwenlm.ai/generated-images/d3f7e042-ac15-4531-8403-df7eba42d1e0/_result.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

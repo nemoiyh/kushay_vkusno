@@ -57,6 +57,63 @@ export default function App() {
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3400);
   }, []);
 
+  /* ------- PWA: установка, офлайн, «нативный» запуск ------- */
+
+  const [pwaEvent, setPwaEvent] = useState<Event | null>(null);
+  const [installed, setInstalled] = useState(
+    () =>
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as { standalone?: boolean }).standalone === true,
+  );
+  const [hintDismissed, setHintDismissed] = useState(
+    () => localStorage.getItem("seyedeno:hint") === "1",
+  );
+
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault(); // перехватываем, чтобы предложить установку из интерфейса
+      setPwaEvent(e);
+    };
+    const onInstalled = () => {
+      setInstalled(true);
+      setPwaEvent(null);
+      toast("Приложение установлено на устройство");
+    };
+    const onOffline = () => toast("Нет сети — приложение продолжает работать офлайн", "info");
+    const onOnline = () => toast("Связь восстановлена", "info");
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [toast]);
+
+  const promptInstall = useCallback(async () => {
+    const ev = pwaEvent as (Event & { prompt?: () => void; userChoice?: Promise<{ outcome: string }> }) | null;
+    if (!ev?.prompt) {
+      toast("Откройте меню браузера: «Установить приложение» или «На экран Домой»", "info");
+      return;
+    }
+    ev.prompt();
+    const choice = await ev.userChoice;
+    if (choice?.outcome === "accepted") toast("Установка началась");
+    setPwaEvent(null);
+  }, [pwaEvent, toast]);
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const showIosHint = isIOS && !installed && !hintDismissed;
+  const dismissHint = () => {
+    setHintDismissed(true);
+    try {
+      localStorage.setItem("seyedeno:hint", "1");
+    } catch { /* ignore */ }
+  };
+
   const today = data.days[todayKey()];
   const todayTotals = useMemo(() => dayTotals(today), [today]);
   const streak = useMemo(() => streakDays(data.days, data.goals.kcal), [data.days, data.goals.kcal]);
@@ -139,7 +196,7 @@ export default function App() {
   return (
     <div className="min-h-dvh">
       {/* шапка */}
-      <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-line bg-paper/85 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
           <LogoMark size={36} />
           <div className="leading-none">
@@ -157,6 +214,25 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* подсказка об установке на iPhone */}
+      {showIosHint && (
+        <div className="border-b border-line bg-waterwash/80">
+          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 anim-in sm:px-6">
+            <IApple width={17} height={17} className="shrink-0 text-water" />
+            <p className="flex-1 text-xs leading-snug sm:text-[13px]">
+              Поставьте «Съедено» на домашний экран: <b>«Поделиться»</b> → <b>«На экран „Домой"»</b> —
+              запуск в одно касание, работает офлайн.
+            </p>
+            <button
+              onClick={dismissHint}
+              className="btn-press shrink-0 rounded-lg border border-line bg-card px-2.5 py-1 text-[11px] font-bold text-soft"
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto flex max-w-6xl gap-6 px-4 sm:px-6">
         {/* сайдбар */}
@@ -238,6 +314,7 @@ export default function App() {
                 }}
                 onExport={handleExport}
                 onReset={handleReset}
+                pwa={{ canInstall: !!pwaEvent, installed, promptInstall }}
               />
             )}
           </div>

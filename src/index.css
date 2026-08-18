@@ -124,3 +124,24 @@ input[type="range"] { accent-color: var(--color-leaf); }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- нативное ощущение (PWA / Capacitor) ---------- */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+}
+button, a, label, summary {
+  touch-action: manipulation;
+}
+
+/* при запуске с домашнего экрана / из нативной оболочки — как настоящее приложение */
+@media (display-mode: standalone) {
+  input, textarea {
+    user-select: text;
+  }
+}
