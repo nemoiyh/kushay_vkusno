@@ -375,22 +375,44 @@ export function GoalsView({
                 )}
               </div>
 
-              <div className="mt-4 grid gap-3 rounded-xl bg-paper p-3.5 text-xs leading-relaxed text-soft sm:grid-cols-3">
-                <div>
-                  <b className="text-ink">iPhone / iPad</b>
-                  <br />
-                  Safari → «Поделиться» → «На экран „Домой"». Запуск в одно касание.
+              <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.25fr]">
+                {/* без APK */}
+                <div className="rounded-xl border border-line bg-paper p-3.5 text-xs leading-relaxed text-soft">
+                  <div className="font-display text-[11px] font-bold text-ink">Быстро · без APK</div>
+                  <p className="mt-1.5">
+                    <b className="text-ink">Android / планшет:</b> Chrome → меню ⋮ → «Установить
+                    приложение» — иконка на домашнем экране, полноэкранный режим, офлайн.
+                  </p>
+                  <p className="mt-1.5">
+                    <b className="text-ink">iPhone / iPad:</b> Safari → «Поделиться» → «На экран
+                    „Домой"».
+                  </p>
                 </div>
-                <div>
-                  <b className="text-ink">Android</b>
-                  <br />
-                  Chrome → меню ⋮ → «Установить приложение».
-                </div>
-                <div>
-                  <b className="text-ink">App Store / Google Play</b>
-                  <br />
-                  Capacitor уже подключён: нужен Mac, Xcode и аккаунт Apple Developer ($99/год).
-                  Пошагово — в README.md.
+
+                {/* APK */}
+                <div className="rounded-xl border border-leaf/35 bg-leafwash/60 p-3.5 text-xs leading-relaxed text-soft">
+                  <div className="font-display text-[11px] font-bold text-leafdeep">
+                    Настоящий APK для планшета · ~10 минут
+                  </div>
+                  <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+                    <li>
+                      Собрать сайт: <code className="rounded bg-card px-1 font-bold text-ink">npm run build</code>{" "}
+                      и выложить папку <b className="text-ink">dist</b> бесплатно (Netlify Drop —
+                      просто перетащить).
+                    </li>
+                    <li>
+                      Вставить адрес на <b className="text-ink">pwabuilder.com</b> → Android →
+                      «Generate package» → готовый подписанный APK.
+                    </li>
+                    <li>
+                      Перенести APK на планшет и открыть — разрешить установку из неизвестных
+                      источников.
+                    </li>
+                  </ol>
+                  <p className="mt-1.5 text-[11px] opacity-80">
+                    Полностью нативная сборка — через Android Studio (Capacitor уже подключён,
+                    скрипт <b className="text-ink">scripts/build-apk.sh</b>, шаги в README.md).
+                  </p>
                 </div>
               </div>
             </div>

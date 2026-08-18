@@ -16,6 +16,10 @@ const config: CapacitorConfig = {
     scrollEnabled: true,
     limitsNavigationsToAppBoundDomains: false,
   },
+  android: {
+    backgroundColor: "#edf1e6",
+    allowMixedContent: false,
+  },
   server: {
     androidScheme: "https",
   },

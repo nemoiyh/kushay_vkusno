@@ -64,9 +64,48 @@ npx cap open ios
 - Категория: «Здоровье и фитнес».
 - Приложение должно приносить пользу без регистрации — наше работает сразу, это плюс для ревью.
 
-## Публикация в Google Play (Android)
+## Как получить APK для планшета (без программирования, ~10 минут)
 
-Тот же подход: `npx cap add android`, `npx cap sync android`, открыть в Android Studio, собрать подписанный AAB (Build → Generate Signed Bundle). Нужен аккаунт Google Play Console (разовый взнос $25).
+Самый простой путь — **PWABuilder** от Microsoft: он берёт сайт-PWA и собирает из него настоящий подписанный APK (внутри — Trusted Web Activity, т.е. тот же код).
+
+### Шаг 1. Собрать и выложить сайт (бесплатно)
+
+```bash
+npm run build
+```
+
+Готовый сайт появится в папке `dist`. Выложите его на любой хостинг:
+
+- **Netlify Drop** (проще всего): открыть [app.netlify.com/drop](https://app.netlify.com/drop) и перетащить папку `dist` в окно браузера → получите ссылку вида `https://имя.netlify.app`.
+- Или GitHub Pages, Vercel, Cloudflare Pages — что удобнее.
+
+### Шаг 2. Сгенерировать APK
+
+1. Открыть [pwabuilder.com](https://www.pwabuilder.com), вставить ссылку на сайт → «Start».
+2. «Package for stores» → **Android** → «Generate package».
+3. Скачать архив: внутри будет `app-release-signed.apk` (и AAB для Google Play) + файл `assetlinks.json`.
+4. Скопировать содержимое `assetlinks.json` на сайт в файл `/.well-known/assetlinks.json` (в нашем случае — положить в `public/.well-known/assetlinks.json` и пересобрать/перевылить). Это подтверждает, что приложение и сайт принадлежат вам, и убирает адресную строку.
+
+### Шаг 3. Установить на планшет
+
+1. Перенести `apk`-файл на планшет (кабель, Telegram «Избранное», Google Drive).
+2. Открыть файл → Android попросит разрешить «Установку из неизвестных источников» → разрешить.
+3. Готово: приложение в меню, работает офлайн.
+
+> В этой песочнице скомпилировать APK напрямую нельзя (нет Android SDK), поэтому используется путь через PWABuilder — результат тот же, что при сборке в Android Studio.
+
+## Публикация в Google Play (Android, нативная сборка)
+
+```bash
+npm run build
+npx cap add android    # один раз (пакет @capacitor/android уже установлен)
+npx cap sync android   # после каждого build
+npx cap open android   # открыть проект в Android Studio
+```
+
+Или готовый скрипт: `bash scripts/build-apk.sh`.
+
+В Android Studio: Build → Build APK(s) (debug-вариант для планшета появится в `android/app/build/outputs/apk/debug/app-debug.apk`) или Build → Generate Signed Bundle (подписанный AAB для Google Play; нужен аккаунт Play Console, разовый взнос $25).
 
 ## Рекомендации перед релизом
 
@@ -83,5 +122,6 @@ src/
   lib/store.ts  — localStorage, даты, расчёты, демо-данные
 public/
   manifest.webmanifest, sw.js — PWA-обвязка (манифест + офлайн-кэш)
+scripts/build-apk.sh — локальная сборка Android-версии
 capacitor.config.ts — упаковка в iOS/Android
 ```
