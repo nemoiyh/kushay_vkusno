@@ -1,6 +1,6 @@
 export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
 export type Sex = "male" | "female";
-export type View = "diary" | "foods" | "stats" | "goals";
+export type View = "diary" | "foods" | "stats" | "goals" | "settings";
 
 export interface Food {
   id: string;

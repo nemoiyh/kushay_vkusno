@@ -1,8 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppData, Entry, Food, Goals, Meal, Profile, ToastItem, ToastKind, View } from "./types";
 import {
   STORAGE_KEY,
-  dayTotals,
   defaultMealByHour,
   fmt,
   loadState,
@@ -14,13 +13,13 @@ import {
   uid,
 } from "./lib/store";
 import { FOODS } from "./data/foods";
-import { fetchOffProduct } from "./lib/off";
-import { AnimatedNumber, ToastStack } from "./components/ui";
+import { ToastStack } from "./components/ui";
 import {
   IApple,
   IBook,
   IChart,
   IFlame,
+  ISettings,
   ITarget,
   LogoMark,
 } from "./components/Icons";
@@ -28,26 +27,16 @@ import { DiaryView } from "./components/DiaryView";
 import { DatabaseView } from "./components/DatabaseView";
 import { StatsView } from "./components/StatsView";
 import { GoalsView } from "./components/GoalsView";
+import { SettingsView } from "./components/SettingsView";
 import { AddEntryModal, type EntryDraftInput } from "./components/AddEntryModal";
-
-// сканер штрихкода грузится отдельным чанком — не утяжеляет первый экран
-const BarcodeModal = lazy(() =>
-  import("./components/BarcodeModal").then((m) => ({ default: m.BarcodeModal })),
-);
 
 const NAV: { id: View; label: string; icon: typeof IBook }[] = [
   { id: "diary", label: "Дневник", icon: IBook },
   { id: "foods", label: "Продукты", icon: IApple },
   { id: "stats", label: "Статистика", icon: IChart },
   { id: "goals", label: "Цели", icon: ITarget },
+  { id: "settings", label: "Настройки", icon: ISettings },
 ];
-
-const VIEW_TITLE: Record<View, string> = {
-  diary: "Дневник питания",
-  foods: "База продуктов",
-  stats: "Статистика",
-  goals: "Цели и профиль",
-};
 
 export default function App() {
   const [data, setData] = useState<AppData>(loadState);
@@ -55,7 +44,6 @@ export default function App() {
   const [dayKey, setDayKey] = useState(todayKey());
   const [draft, setDraft] = useState<(EntryDraftInput & { dateKey: string; ts: number }) | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => saveState(data), [data]);
 
@@ -122,8 +110,6 @@ export default function App() {
     } catch { /* ignore */ }
   };
 
-  const today = data.days[todayKey()];
-  const todayTotals = useMemo(() => dayTotals(today), [today]);
   const streak = useMemo(() => streakDays(data.days, data.goals.kcal), [data.days, data.goals.kcal]);
 
   /* ------- действия ------- */
@@ -199,37 +185,7 @@ export default function App() {
     setDraft({ dateKey: todayKey(), meal: defaultMealByHour(), food, ts: Date.now() });
   };
 
-  /* ------- штрихкоды ------- */
-
-  const handleScanCode = useCallback(
-    async (code: string) => {
-      setScanOpen(false);
-      const local =
-        data.customFoods.find((f) => f.barcode === code) ?? FOODS.find((f) => f.barcode === code);
-      if (local) {
-        setDayKey(todayKey());
-        setDraft({ dateKey: todayKey(), meal: defaultMealByHour(), food: local, ts: Date.now() });
-        toast(`Найдено: ${local.name}`);
-        return;
-      }
-      toast(`Штрихкод ${code}: ищем в Open Food Facts…`, "info");
-      const off = await fetchOffProduct(code);
-      setDayKey(todayKey());
-      if (off) {
-        setDraft({ dateKey: todayKey(), meal: defaultMealByHour(), food: off, ts: Date.now() });
-        toast(`Найдено в Open Food Facts: ${off.name}`);
-      } else {
-        setDraft({
-          dateKey: todayKey(),
-          meal: defaultMealByHour(),
-          barcode: code,
-          ts: Date.now(),
-        });
-        toast(`Штрихкод ${code} не найден — заполните вручную`, "info");
-      }
-    },
-    [data.customFoods, toast],
-  );
+  /* ------- свои продукты ------- */
 
   const saveCustomFood = useCallback((f: Omit<Food, "id">): Food => {
     const food: Food = { ...f, id: uid() };
@@ -251,21 +207,9 @@ export default function App() {
     <div className="min-h-dvh">
       {/* шапка */}
       <header className="sticky top-0 z-40 border-b border-line bg-paper/85 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
-          <LogoMark size={36} />
-          <div className="leading-none">
-            <div className="font-display text-[14px] font-extrabold tracking-wide">КУШАЙ ВКУСНО</div>
-            <div className="mt-0.5 text-[11px] font-medium text-faint">дневник питания</div>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="hidden items-center gap-2 rounded-xl border border-line bg-card px-3 py-1.5 hard-sm sm:flex">
-              <IFlame width={15} height={15} className="text-carrot" />
-              <span className="text-xs font-semibold text-soft">сегодня</span>
-              <AnimatedNumber value={todayTotals.kcal} className="font-display text-sm font-extrabold tabular-nums" />
-              <span className="text-xs text-faint tabular-nums">/ {fmt(data.goals.kcal)} ккал</span>
-            </div>
-            <span className="hidden text-xs font-medium text-faint md:block">{VIEW_TITLE[view]}</span>
-          </div>
+        <div className="mx-auto flex max-w-6xl items-center justify-center gap-3 px-4 py-3 sm:px-6">
+          <LogoMark size={34} />
+          <div className="font-display text-[15px] font-extrabold tracking-wide">КУШАЙ ВКУСНО</div>
         </div>
       </header>
 
@@ -347,7 +291,6 @@ export default function App() {
                 onEdit={(entry) => setDraft({ dateKey: dayKey, meal: entry.meal, entry, ts: Date.now() })}
                 onDelete={handleDelete}
                 onWater={(n) => upsertDay(dayKey, (d) => ({ ...d, water: n }))}
-                onScan={() => setScanOpen(true)}
               />
             )}
             {view === "foods" && (
@@ -374,6 +317,10 @@ export default function App() {
                   setData((p) => ({ ...p, weights: p.weights.filter((w) => w.date !== date) }));
                   toast("Замер удалён", "info");
                 }}
+              />
+            )}
+            {view === "settings" && (
+              <SettingsView
                 onExport={handleExport}
                 onReset={handleReset}
                 pwa={{ canInstall: !!pwaEvent, installed, promptInstall }}
@@ -385,7 +332,7 @@ export default function App() {
 
       {/* мобильная навигация */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-4 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
+        <div className="mx-auto grid max-w-md grid-cols-5 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = view === n.id;
@@ -416,12 +363,6 @@ export default function App() {
           customFoods={data.customFoods}
           onSaveCustomFood={saveCustomFood}
         />
-      )}
-
-      {scanOpen && (
-        <Suspense fallback={null}>
-          <BarcodeModal onCode={handleScanCode} onClose={() => setScanOpen(false)} />
-        </Suspense>
       )}
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
