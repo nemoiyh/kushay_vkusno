@@ -140,7 +140,9 @@ export function Modal({
         className="relative w-full sm:max-w-xl max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-line bg-card hard-sm animate-rise"
         style={{ boxShadow: "0 24px 60px rgba(23,40,30,0.28)" }}
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-linesoft bg-card/95 backdrop-blur px-5 py-4 sm:px-6">
+        {/* «ручка» нижней шторки — как в нативных приложениях iOS */}
+        <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-ink/15 sm:hidden" />
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-linesoft bg-card/95 backdrop-blur px-5 py-3.5 sm:px-6 sm:py-4">
           <div>
             <h2 className="font-display text-[15px] font-bold leading-tight">{title}</h2>
             {subtitle && <p className="mt-0.5 text-xs text-soft">{subtitle}</p>}
@@ -153,7 +155,7 @@ export function Modal({
             <IX width={18} height={18} />
           </button>
         </div>
-        <div className="px-5 py-5 sm:px-6">{children}</div>
+        <div className="px-5 pt-4 pb-[max(env(safe-area-inset-bottom),24px)] sm:px-6 sm:py-5">{children}</div>
       </div>
     </div>
   );

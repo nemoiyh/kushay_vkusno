@@ -130,7 +130,7 @@ export function DiaryView({
               <h3 className="font-display text-[13px] font-bold">Вода</h3>
               <span className="text-xs font-semibold text-water tabular-nums">{water * 250} мл</span>
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 grid grid-cols-8 gap-1.5">
               {Array.from({ length: 8 }, (_, i) => {
                 const filled = i < water;
                 return (
@@ -138,7 +138,7 @@ export function DiaryView({
                     key={i}
                     onClick={() => onWater(i + 1 === water ? i : i + 1)}
                     aria-label={`Стакан ${i + 1}`}
-                    className={`btn-press grid size-10 place-items-center rounded-xl border transition-colors ${
+                    className={`btn-press grid aspect-square w-full place-items-center rounded-xl border transition-colors ${
                       filled
                         ? "border-water bg-waterwash text-water"
                         : "border-line bg-field text-faint hover:text-water"

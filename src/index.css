@@ -43,7 +43,7 @@ body {
     radial-gradient(rgba(23, 40, 30, 0.055) 1px, transparent 1.4px);
   background-size: auto, auto, 23px 23px;
   background-attachment: fixed;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 ::selection {
@@ -149,5 +149,19 @@ button, a, label, summary {
 @media (display-mode: standalone) {
   input, textarea {
     user-select: text;
+  }
+}
+
+/* ---------- iPhone: клавиатура и safe-areas ---------- */
+.pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+
+/* на iOS поля с шрифтом меньше 16px приближают экран при фокусе */
+@media (max-width: 640px) {
+  .field {
+    font-size: 16px;
+    padding: 11px 12px;
+  }
+  input:not([type="range"]):not([type="checkbox"]) {
+    font-size: 16px;
   }
 }
