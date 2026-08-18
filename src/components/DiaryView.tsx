@@ -82,7 +82,16 @@ export function DiaryView({
         )}
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      {/* заголовок секции — над обеими колонками, поэтому верхняя грань «Завтрака»
+          совпадает с верхней гранью квадрата КБЖУ */}
+      <div className="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-[15px] font-extrabold sm:text-base">Приёмы пищи</h2>
+        <span className="hidden text-[11px] font-medium text-faint lg:block">
+          нажмите на плитку — откроется список блюд
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-5 lg:grid-cols-2">
         {/* квадрат КБЖУ: на десктопе его грани совпадают с гранями плиток */}
         <section className="card flex flex-col p-5 lg:h-full">
           <div className="flex items-center gap-5">
@@ -114,11 +123,9 @@ export function DiaryView({
           </div>
         </section>
 
-        {/* приёмы пищи */}
+        {/* плитки приёмов пищи */}
         <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0">
-          <h2 className="font-display text-[15px] font-extrabold">Приёмы пищи</h2>
-
-          <div className="mt-3 grid flex-1 grid-cols-2 gap-3 sm:gap-4 lg:mt-4 lg:grid-rows-2 lg:gap-5 lg:min-h-0">
+          <div className="grid flex-1 grid-cols-2 gap-3 sm:gap-4 lg:grid-rows-2 lg:gap-5 lg:min-h-0">
             {MEALS.map((m) => {
               const items = (day?.entries ?? []).filter((e) => e.meal === m.id);
               const sub = items.reduce((s, e) => s + e.kcal, 0);
