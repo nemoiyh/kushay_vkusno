@@ -82,9 +82,9 @@ export function DiaryView({
         )}
       </div>
 
-      <div className="mt-5 grid content-start gap-5 lg:grid-cols-[360px_1fr]">
-        {/* квадрат КБЖУ */}
-        <section className="card h-fit p-5 lg:sticky lg:top-24">
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        {/* квадрат КБЖУ: на десктопе его грани совпадают с гранями плиток */}
+        <section className="card flex flex-col p-5 lg:h-full">
           <div className="flex items-center gap-5">
             <Ring value={totals.kcal} max={goals.kcal} color={ringColor}>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">съедено</span>
@@ -114,11 +114,11 @@ export function DiaryView({
           </div>
         </section>
 
-        {/* приёмы пищи + вода */}
-        <div className="flex min-w-0 flex-col gap-4">
+        {/* приёмы пищи */}
+        <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0">
           <h2 className="font-display text-[15px] font-extrabold">Приёмы пищи</h2>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="mt-3 grid flex-1 grid-cols-2 gap-3 sm:gap-4 lg:mt-4 lg:grid-rows-2 lg:gap-5 lg:min-h-0">
             {MEALS.map((m) => {
               const items = (day?.entries ?? []).filter((e) => e.meal === m.id);
               const sub = items.reduce((s, e) => s + e.kcal, 0);
@@ -137,9 +137,12 @@ export function DiaryView({
             })}
           </div>
 
-          {/* вода — в самом низу ленты */}
-          <section className="card p-5">
-            <div className="flex items-baseline justify-between">
+        </div>
+      </div>
+
+      {/* вода — в самом низу ленты, во всю ширину страницы */}
+      <section className="card mt-5 p-4 sm:p-5">
+        <div className="flex items-baseline justify-between">
               <h3 className="font-display text-[13px] font-bold">Вода</h3>
               <span className="text-xs font-semibold text-water tabular-nums">{water * 250} мл</span>
             </div>
@@ -167,9 +170,7 @@ export function DiaryView({
             <p className="mt-2.5 text-[11px] text-faint">
               {water} из 8 стаканов · кликните, чтобы отметить
             </p>
-          </section>
-        </div>
-      </div>
+      </section>
 
       {/* список продуктов приёма пищи */}
       {modal && (
@@ -269,14 +270,10 @@ function MealTile({
   onAdd: () => void;
 }) {
   return (
-    <div className="card group relative aspect-square overflow-hidden p-3.5 transition-transform duration-200 hover:-translate-y-0.5 sm:p-4">
+    <div className="card group relative aspect-square overflow-hidden p-3.5 transition-transform duration-200 hover:-translate-y-0.5 sm:p-4 lg:aspect-auto lg:h-full lg:min-h-0">
       {/* вся плитка кликабельна */}
       <button onClick={onOpen} aria-label={`Открыть ${label}`} className="absolute inset-0" />
 
-      <span
-        className="pointer-events-none absolute left-3.5 top-[19px] size-2.5 rounded-full sm:left-4"
-        style={{ background: MEAL_DOT[meal] }}
-      />
       <button
         onClick={onAdd}
         aria-label={`Добавить в ${label.toLowerCase()}`}
@@ -285,8 +282,11 @@ function MealTile({
         <IPlus width={15} height={15} />
       </button>
 
-      <div className="pointer-events-none relative flex h-full flex-col pl-4 pr-8 pt-0.5">
-        <h3 className="truncate font-display text-[13px] font-bold leading-tight sm:text-sm">{label}</h3>
+      <div className="pointer-events-none relative flex h-full flex-col pr-8 pt-0.5">
+        <h3 className="flex items-center gap-2 truncate font-display text-[13px] font-bold leading-tight sm:text-sm">
+          <span className="size-2.5 shrink-0 rounded-full" style={{ background: MEAL_DOT[meal] }} />
+          {label}
+        </h3>
 
         <div className="flex flex-1 flex-col items-center justify-center gap-0.5">
           <span

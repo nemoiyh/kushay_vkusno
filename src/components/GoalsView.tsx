@@ -65,10 +65,7 @@ export function GoalsView({
 
   return (
     <div className="anim-in">
-      <h1 className="font-display text-xl font-extrabold sm:text-2xl">Цели и профиль</h1>
-      <p className="mt-1 text-sm text-soft">Настройте дневную норму — кольца и полосы в дневнике подстроятся</p>
-
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* дневная цель */}
         <section className="card p-5">
           <h2 className="font-display text-[13px] font-bold">Дневная цель</h2>

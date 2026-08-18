@@ -18,23 +18,21 @@ import {
   IApple,
   IBook,
   IChart,
+  IChefHat,
   IFlame,
   ISettings,
-  ITarget,
   LogoMark,
 } from "./components/Icons";
 import { DiaryView } from "./components/DiaryView";
 import { DatabaseView } from "./components/DatabaseView";
 import { StatsView } from "./components/StatsView";
-import { GoalsView } from "./components/GoalsView";
 import { SettingsView } from "./components/SettingsView";
 import { AddEntryModal, type EntryDraftInput } from "./components/AddEntryModal";
 
 const NAV: { id: View; label: string; icon: typeof IBook }[] = [
   { id: "diary", label: "Дневник", icon: IBook },
-  { id: "foods", label: "Продукты", icon: IApple },
+  { id: "foods", label: "Рецепты", icon: IChefHat },
   { id: "stats", label: "Статистика", icon: IChart },
-  { id: "goals", label: "Цели", icon: ITarget },
   { id: "settings", label: "Настройки", icon: ISettings },
 ];
 
@@ -198,7 +196,7 @@ export default function App() {
 
   const deleteCustomFood = useCallback((id: string) => {
     setData((prev) => ({ ...prev, customFoods: prev.customFoods.filter((f) => f.id !== id) }));
-    toast("Продукт удалён из «Мои продукты»", "info");
+    toast("Удалено из «Мои рецепты»", "info");
   }, [toast]);
 
   /* ------- рендер ------- */
@@ -207,9 +205,14 @@ export default function App() {
     <div className="min-h-dvh">
       {/* шапка */}
       <header className="sticky top-0 z-40 border-b border-line bg-paper/85 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-center gap-3 px-4 py-3 sm:px-6">
-          <LogoMark size={34} />
-          <div className="font-display text-[15px] font-extrabold tracking-wide">КУШАЙ ВКУСНО</div>
+        <div className="mx-auto flex max-w-6xl items-center justify-center gap-3 px-4 py-2.5 sm:px-6">
+          <LogoMark size={38} />
+          <div className="leading-none">
+            <div className="font-display text-[15px] font-extrabold tracking-wide sm:text-base">КУШАЙ ВКУСНО</div>
+            <div className="mt-1 text-[10px] font-medium tracking-[0.18em] text-soft">
+              не будет грустно
+            </div>
+          </div>
         </div>
       </header>
 
@@ -269,8 +272,8 @@ export default function App() {
               </div>
             </div>
             <p className="px-1 text-[10px] leading-relaxed text-faint">
-              Данные хранятся локально в браузере. База — {fmt(FOODS.length)} продуктов, включая
-              каталог «Перекрёстка».
+              Данные хранятся локально в браузере. Каталог — {fmt(FOODS.length)} позиций, включая
+              «Перекрёсток».
             </p>
           </div>
         </aside>
@@ -301,8 +304,8 @@ export default function App() {
               />
             )}
             {view === "stats" && <StatsView data={data} />}
-            {view === "goals" && (
-              <GoalsView
+            {view === "settings" && (
+              <SettingsView
                 data={data}
                 onUpdateGoals={(g: Goals) => setData((p) => ({ ...p, goals: g }))}
                 onUpdateProfile={(pr: Profile) => setData((p) => ({ ...p, profile: pr }))}
@@ -317,10 +320,6 @@ export default function App() {
                   setData((p) => ({ ...p, weights: p.weights.filter((w) => w.date !== date) }));
                   toast("Замер удалён", "info");
                 }}
-              />
-            )}
-            {view === "settings" && (
-              <SettingsView
                 onExport={handleExport}
                 onReset={handleReset}
                 pwa={{ canInstall: !!pwaEvent, installed, promptInstall }}
@@ -332,7 +331,7 @@ export default function App() {
 
       {/* мобильная навигация */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
+        <div className="mx-auto grid max-w-md grid-cols-4 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = view === n.id;

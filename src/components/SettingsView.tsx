@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import type { AppData, Goals, Profile } from "../types";
 import { FOODS } from "../data/foods";
 import { fmt } from "../lib/store";
+import { GoalsView } from "./GoalsView";
 import { IApple, ICheck, IDownload, IInfo, ITrash } from "./Icons";
 
 const APP_ICON_URL =
@@ -13,10 +15,20 @@ export interface PwaInfo {
 }
 
 export function SettingsView({
+  data,
+  onUpdateGoals,
+  onUpdateProfile,
+  onAddWeight,
+  onDeleteWeight,
   pwa,
   onExport,
   onReset,
 }: {
+  data: AppData;
+  onUpdateGoals: (g: Goals) => void;
+  onUpdateProfile: (p: Profile) => void;
+  onAddWeight: (value: number) => void;
+  onDeleteWeight: (date: string) => void;
   pwa: PwaInfo;
   onExport: () => void;
   onReset: () => void;
@@ -40,7 +52,18 @@ export function SettingsView({
   return (
     <div className="anim-in">
       <h1 className="font-display text-xl font-extrabold sm:text-2xl">Настройки</h1>
-      <p className="mt-1 text-sm text-soft">Установка, данные и сведения о приложении</p>
+      <p className="mt-1 text-sm text-soft">Цели и профиль, данные, установка</p>
+
+      {/* цели, калькулятор нормы, профиль и вес */}
+      <div className="mt-5">
+        <GoalsView
+          data={data}
+          onUpdateGoals={onUpdateGoals}
+          onUpdateProfile={onUpdateProfile}
+          onAddWeight={onAddWeight}
+          onDeleteWeight={onDeleteWeight}
+        />
+      </div>
 
       <div className="mt-5 grid content-start gap-5 lg:grid-cols-2">
         {/* приложение */}
@@ -166,7 +189,7 @@ export function SettingsView({
           <ul className="mt-3 space-y-2.5 text-sm">
             <li className="flex items-center gap-2.5 text-soft">
               <IInfo width={15} height={15} className="shrink-0 text-leaf" />
-              База — {fmt(FOODS.length)} продуктов, включая каталог «Перекрёстка»
+              Каталог — {fmt(FOODS.length)} блюд и продуктов, включая «Перекрёсток»
             </li>
             <li className="flex items-center gap-2.5 text-soft">
               <IInfo width={15} height={15} className="shrink-0 text-leaf" />
