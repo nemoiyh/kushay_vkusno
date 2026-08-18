@@ -35,9 +35,9 @@ export function DatabaseView({
     <div className="anim-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-xl font-extrabold sm:text-2xl">Рецепты</h1>
+          <h1 className="font-display text-xl font-extrabold sm:text-2xl">Продукты</h1>
           <p className="mt-1 text-sm text-soft">
-            {fmt(FOODS.length + customFoods.length)} блюд и продуктов · значения на 100 г · «+» — добавить в дневник
+            {fmt(FOODS.length + customFoods.length)} продуктов · значения на 100 г · «+» — добавить в дневник
           </p>
         </div>
         <span className="flex items-center gap-2 rounded-xl border border-leaf/35 bg-leafwash px-3 py-2 text-xs font-bold text-leafdeep hard-sm">
@@ -76,7 +76,7 @@ export function DatabaseView({
           <header className="flex items-center gap-2 border-b border-line bg-field/70 px-4 py-2.5">
             <span className="size-2 rounded-full bg-teal" />
             <h2 className="font-display text-xs font-bold">
-              Мои рецепты <span className="text-faint">({customFoods.length})</span>
+              Мои продукты <span className="text-faint">({customFoods.length})</span>
             </h2>
             <span className="ml-auto text-[11px] text-faint">созданы вами, в т. ч. по штрихкоду</span>
           </header>

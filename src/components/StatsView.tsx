@@ -26,9 +26,11 @@ export function StatsView({ data }: { data: AppData }) {
   const wDelta = weights.length >= 2 ? weights[weights.length - 1].value - weights[0].value : null;
 
   return (
-    <div className="anim-in">
-      <h1 className="font-display text-xl font-extrabold sm:text-2xl">Статистика</h1>
-      <p className="mt-1 text-sm text-soft">Последние 7 дней · цель {fmt(data.goals.kcal)} ккал</p>
+    <div className="anim-in mt-10">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-[15px] font-extrabold sm:text-base">Статистика</h2>
+        <span className="text-[11px] font-medium text-faint">Последние 7 дней · цель {fmt(data.goals.kcal)} ккал</span>
+      </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_320px]">
         {/* график недели */}

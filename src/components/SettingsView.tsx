@@ -189,7 +189,7 @@ export function SettingsView({
           <ul className="mt-3 space-y-2.5 text-sm">
             <li className="flex items-center gap-2.5 text-soft">
               <IInfo width={15} height={15} className="shrink-0 text-leaf" />
-              Каталог — {fmt(FOODS.length)} блюд и продуктов, включая «Перекрёсток»
+              База — {fmt(FOODS.length)} продуктов, включая каталог «Перекрёстка»
             </li>
             <li className="flex items-center gap-2.5 text-soft">
               <IInfo width={15} height={15} className="shrink-0 text-leaf" />

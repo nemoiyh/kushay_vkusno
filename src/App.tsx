@@ -17,8 +17,6 @@ import { ToastStack } from "./components/ui";
 import {
   IApple,
   IBook,
-  IChart,
-  IChefHat,
   IFlame,
   ISettings,
   LogoMark,
@@ -31,8 +29,7 @@ import { AddEntryModal, type EntryDraftInput } from "./components/AddEntryModal"
 
 const NAV: { id: View; label: string; icon: typeof IBook }[] = [
   { id: "diary", label: "Дневник", icon: IBook },
-  { id: "foods", label: "Рецепты", icon: IChefHat },
-  { id: "stats", label: "Статистика", icon: IChart },
+  { id: "foods", label: "Продукты", icon: IApple },
   { id: "settings", label: "Настройки", icon: ISettings },
 ];
 
@@ -196,7 +193,7 @@ export default function App() {
 
   const deleteCustomFood = useCallback((id: string) => {
     setData((prev) => ({ ...prev, customFoods: prev.customFoods.filter((f) => f.id !== id) }));
-    toast("Удалено из «Мои рецепты»", "info");
+    toast("Продукт удалён из «Мои продукты»", "info");
   }, [toast]);
 
   /* ------- рендер ------- */
@@ -272,8 +269,8 @@ export default function App() {
               </div>
             </div>
             <p className="px-1 text-[10px] leading-relaxed text-faint">
-              Данные хранятся локально в браузере. Каталог — {fmt(FOODS.length)} позиций, включая
-              «Перекрёсток».
+              Данные хранятся локально в браузере. База — {fmt(FOODS.length)} продуктов, включая
+              каталог «Перекрёстка».
             </p>
           </div>
         </aside>
@@ -282,19 +279,23 @@ export default function App() {
         <main className="min-w-0 flex-1 py-6 pb-28 lg:pb-12">
           <div key={view}>
             {view === "diary" && (
-              <DiaryView
-                dayKey={dayKey}
-                day={data.days[dayKey]}
-                goals={data.goals}
-                onNav={(d) => setDayKey((k) => {
-                  const next = d === 0 ? todayKey() : shiftKey(k, d);
-                  return next > todayKey() ? todayKey() : next;
-                })}
-                onAdd={(meal) => openAdd(meal)}
-                onEdit={(entry) => setDraft({ dateKey: dayKey, meal: entry.meal, entry, ts: Date.now() })}
-                onDelete={handleDelete}
-                onWater={(n) => upsertDay(dayKey, (d) => ({ ...d, water: n }))}
-              />
+              <>
+                <DiaryView
+                  dayKey={dayKey}
+                  day={data.days[dayKey]}
+                  goals={data.goals}
+                  onNav={(d) => setDayKey((k) => {
+                    const next = d === 0 ? todayKey() : shiftKey(k, d);
+                    return next > todayKey() ? todayKey() : next;
+                  })}
+                  onAdd={(meal) => openAdd(meal)}
+                  onEdit={(entry) => setDraft({ dateKey: dayKey, meal: entry.meal, entry, ts: Date.now() })}
+                  onDelete={handleDelete}
+                  onWater={(n) => upsertDay(dayKey, (d) => ({ ...d, water: n }))}
+                />
+                {/* статистика — нижняя секция дневника */}
+                <StatsView data={data} />
+              </>
             )}
             {view === "foods" && (
               <DatabaseView
@@ -303,7 +304,6 @@ export default function App() {
                 onDeleteCustomFood={deleteCustomFood}
               />
             )}
-            {view === "stats" && <StatsView data={data} />}
             {view === "settings" && (
               <SettingsView
                 data={data}
@@ -331,7 +331,7 @@ export default function App() {
 
       {/* мобильная навигация */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-4 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
+        <div className="mx-auto grid max-w-md grid-cols-3 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = view === n.id;
