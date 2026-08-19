@@ -161,28 +161,28 @@ export function StatsView({
           </div>
         </section>
 
-        {/* РЯД 3 · Активность+Шаги / Сон / Вода */}
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
-          <section className="card p-5 md:col-span-2 lg:col-span-6 sm:p-6">
-            <div className="grid grid-cols-1 gap-6 min-[430px]:grid-cols-2 min-[430px]:gap-0">
-              <ActivityZone
-                vals={actVals}
-                today={todayAct}
-                onSave={onActivity}
-                className="min-[430px]:pr-6"
-              />
-              <StepsZone
-                vals={stepsVals}
-                avg={Math.round(avgOf(stepsVals))}
-                today={todaySteps?.value}
-                onSave={onSteps}
-                className="border-t border-dashed border-line pt-5 min-[430px]:border-l min-[430px]:border-t-0 min-[430px]:pl-6 min-[430px]:pt-0"
-              />
-            </div>
-          </section>
+        {/* РЯД 3 · Активность + Шаги — широкая карточка на всю ширину (50/50) */}
+        <section className="card p-5 sm:p-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-0">
+            <ActivityZone
+              vals={actVals}
+              today={todayAct}
+              onSave={onActivity}
+              className="md:pr-6"
+            />
+            <StepsZone
+              vals={stepsVals}
+              avg={Math.round(avgOf(stepsVals))}
+              today={todaySteps?.value}
+              onSave={onSteps}
+              className="border-t border-dashed border-line pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0"
+            />
+          </div>
+        </section>
 
+        {/* РЯД 4 · Сон и Вода — рядом, по 50% */}
+        <div className="grid gap-5 md:grid-cols-2">
           <SleepZone
-            className="md:col-span-1 lg:col-span-3"
             vals={sleepVals}
             avg={avgOf(sleepVals)}
             today={todaySleep}
@@ -190,7 +190,6 @@ export function StatsView({
           />
 
           <WaterZone
-            className="md:col-span-1 lg:col-span-3"
             vals={waterVals}
             avg={avgOf(waterVals)}
           />
@@ -844,7 +843,7 @@ function SleepZone({
 
       <div className="mt-3 flex items-stretch gap-1.5">
         <input
-          className="field h-9 w-14 shrink-0 py-0 text-center text-[13px] tabular-nums"
+          className="field h-9 w-16 shrink-0 py-0 text-center text-[13px] tabular-nums"
           placeholder="ч"
           inputMode="decimal"
           value={hours}
