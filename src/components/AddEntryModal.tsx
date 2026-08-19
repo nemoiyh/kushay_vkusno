@@ -254,7 +254,7 @@ export function AddEntryModal({
               <div className="relative flex-1">
                 <ISearch width={16} height={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
                 <input
-                  className="field pl-9"
+                  className="field field-icon"
                   placeholder="Найти продукт… например, гречка"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}

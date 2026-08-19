@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Food } from "../types";
 import { CATS, FOODS, PEREKRESTOK } from "../data/foods";
 import { fmt } from "../lib/store";
-import { IApple, IBarcode, IPlus, ISearch, IStore, ITrash } from "./Icons";
+import { IApple, IBarcode, IPlus, ISearch, IStore, ITrash, IX } from "./Icons";
 
 export function DatabaseView({
   onPick,
@@ -46,15 +46,24 @@ export function DatabaseView({
         </span>
       </div>
 
-      <div className="mt-4 flex flex-col gap-3">
+      <div className="mt-4 flex flex-col gap-4">
         <div className="relative">
-          <ISearch width={16} height={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+          <ISearch width={18} height={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
           <input
-            className="field pl-10"
+            className={`field field-search${query ? " field-search-with-clear" : ""}`}
             placeholder="Поиск: курица, гречка, «Перекрёсток»…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              aria-label="Очистить поиск"
+              className="btn-press absolute right-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg border border-line bg-card text-soft hover:text-ink"
+            >
+              <IX width={13} height={13} />
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-1.5">
           <CatChip label="Все" active={cat === null} onClick={() => setCat(null)} />
