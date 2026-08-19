@@ -1,22 +1,37 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AppData, Entry, Food, Goals, Meal, Profile, ToastItem, ToastKind, View } from "./types";
+import type {
+  AppData,
+  Entry,
+  Food,
+  Goals,
+  Meal,
+  MeasureKey,
+  Profile,
+  SleepEntry,
+  ToastItem,
+  ToastKind,
+  View,
+} from "./types";
 import {
   STORAGE_KEY,
   defaultMealByHour,
   fmt,
   loadState,
   mealLabel,
+  ru1,
   saveState,
   shiftKey,
   streakDays,
   todayKey,
   uid,
+  upsertByDate,
 } from "./lib/store";
 import { FOODS } from "./data/foods";
 import { ToastStack } from "./components/ui";
 import {
   IApple,
   IBook,
+  IChart,
   IFlame,
   ISettings,
   LogoMark,
@@ -30,6 +45,7 @@ import { AddEntryModal, type EntryDraftInput } from "./components/AddEntryModal"
 const NAV: { id: View; label: string; icon: typeof IBook }[] = [
   { id: "diary", label: "Дневник", icon: IBook },
   { id: "foods", label: "Продукты", icon: IApple },
+  { id: "stats", label: "Статистика", icon: IChart },
   { id: "settings", label: "Настройки", icon: ISettings },
 ];
 
@@ -196,6 +212,34 @@ export default function App() {
     toast("Продукт удалён из «Мои продукты»", "info");
   }, [toast]);
 
+  /* ------- статистика: шаги, сон, активность, замеры ------- */
+
+  const addSteps = useCallback((value: number) => {
+    setData((p) => ({ ...p, steps: upsertByDate(p.steps, { date: todayKey(), value: Math.round(value) }) }));
+    toast(`Шаги записаны: ${fmt(Math.round(value))}`);
+  }, [toast]);
+
+  const addSleep = useCallback((hours: number, quality?: SleepEntry["quality"]) => {
+    setData((p) => ({ ...p, sleep: upsertByDate(p.sleep, { date: todayKey(), hours, quality }) }));
+    toast(`Сон записан: ${ru1(hours)} ч`);
+  }, [toast]);
+
+  const addActivity = useCallback((minutes: number, kcal: number) => {
+    setData((p) => ({ ...p, activity: upsertByDate(p.activity, { date: todayKey(), minutes, kcal }) }));
+    toast(`Активность: ${minutes} мин · ${kcal} ккал`);
+  }, [toast]);
+
+  const addMeasures = useCallback((vals: Partial<Record<MeasureKey, number>>) => {
+    setData((p) => {
+      const measures = { ...p.measures };
+      (Object.entries(vals) as [MeasureKey, number][]).forEach(([k, v]) => {
+        measures[k] = upsertByDate(measures[k] ?? [], { date: todayKey(), value: v });
+      });
+      return { ...p, measures };
+    });
+    toast("Замеры тела сохранены");
+  }, [toast]);
+
   /* ------- рендер ------- */
 
   return (
@@ -293,8 +337,6 @@ export default function App() {
                   onDelete={handleDelete}
                   onWater={(n) => upsertDay(dayKey, (d) => ({ ...d, water: n }))}
                 />
-                {/* статистика — нижняя секция дневника */}
-                <StatsView data={data} />
               </>
             )}
             {view === "foods" && (
@@ -302,6 +344,15 @@ export default function App() {
                 onPick={openPick}
                 customFoods={data.customFoods}
                 onDeleteCustomFood={deleteCustomFood}
+              />
+            )}
+            {view === "stats" && (
+              <StatsView
+                data={data}
+                onSteps={addSteps}
+                onSleep={addSleep}
+                onActivity={addActivity}
+                onMeasures={addMeasures}
               />
             )}
             {view === "settings" && (
@@ -331,7 +382,7 @@ export default function App() {
 
       {/* мобильная навигация */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-3 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
+        <div className="mx-auto grid max-w-md grid-cols-4 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2">
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = view === n.id;

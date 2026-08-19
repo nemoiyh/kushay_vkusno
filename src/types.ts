@@ -1,6 +1,6 @@
 export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
 export type Sex = "male" | "female";
-export type View = "diary" | "foods" | "settings";
+export type View = "diary" | "foods" | "stats" | "settings";
 
 export interface Food {
   id: string;
@@ -54,6 +54,38 @@ export interface WeightEntry {
   value: number;
 }
 
+/** ключи замеров тела */
+export type MeasureKey =
+  | "chest"
+  | "shoulders"
+  | "waist"
+  | "belly"
+  | "hips"
+  | "leg"
+  | "arm";
+
+export interface MeasureEntry {
+  date: string;
+  value: number; // см
+}
+
+export interface StepsEntry {
+  date: string;
+  value: number;
+}
+
+export interface ActivityEntry {
+  date: string;
+  minutes: number;
+  kcal: number; // активные ккал
+}
+
+export interface SleepEntry {
+  date: string;
+  hours: number;
+  quality?: "good" | "ok" | "bad";
+}
+
 export interface AppData {
   days: Record<string, DayLog>;
   goals: Goals;
@@ -61,6 +93,11 @@ export interface AppData {
   weights: WeightEntry[];
   /** продукты пользователя (в т. ч. созданные по штрихкоду) */
   customFoods: Food[];
+  /** замеры тела по параметрам */
+  measures: Record<MeasureKey, MeasureEntry[]>;
+  steps: StepsEntry[];
+  activity: ActivityEntry[];
+  sleep: SleepEntry[];
 }
 
 export type ToastKind = "success" | "error" | "info";

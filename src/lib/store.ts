@@ -1,4 +1,13 @@
-import type { AppData, DayLog, Entry, Food, Meal } from "../types";
+import type {
+  AppData,
+  DayLog,
+  Entry,
+  Food,
+  Meal,
+  MeasureEntry,
+  MeasureKey,
+  SleepEntry,
+} from "../types";
 import { findFood } from "../data/foods";
 
 export const STORAGE_KEY = "seyedeno:v1";
@@ -175,6 +184,31 @@ function seedState(): AppData {
     profile: { sex: "male", age: 28, height: 178, weight: 81.5, activity: 1.375 },
     weights: [w(-6, 82.3), w(-4, 81.9), w(-2, 81.6), w(-1, 81.4)],
     customFoods: [],
+    measures: {
+      chest: [w(-24, 97.2), w(-8, 96.4)],
+      shoulders: [w(-8, 118.5)],
+      waist: [w(-24, 88.6), w(-8, 86.9)],
+      belly: [w(-24, 91.8), w(-8, 89.9)],
+      hips: [w(-24, 102.4), w(-8, 101.6)],
+      leg: [w(-8, 54.6)],
+      arm: [w(-8, 35.4)],
+    },
+    steps: [
+      w(-6, 8420), w(-5, 10650), w(-4, 6180), w(-3, 9340), w(-2, 12100), w(-1, 7450),
+    ],
+    activity: [
+      { date: shiftKey(t, -5), minutes: 45, kcal: 390 },
+      { date: shiftKey(t, -3), minutes: 30, kcal: 255 },
+      { date: shiftKey(t, -1), minutes: 55, kcal: 470 },
+    ],
+    sleep: [
+      { date: shiftKey(t, -6), hours: 7.2, quality: "good" },
+      { date: shiftKey(t, -5), hours: 6.4, quality: "bad" },
+      { date: shiftKey(t, -4), hours: 7.9, quality: "good" },
+      { date: shiftKey(t, -3), hours: 7.0, quality: "ok" },
+      { date: shiftKey(t, -2), hours: 6.7, quality: "ok" },
+      { date: shiftKey(t, -1), hours: 8.1, quality: "good" },
+    ] as SleepEntry[],
   };
 }
 
@@ -185,7 +219,14 @@ export function loadState(): AppData {
       const parsed = JSON.parse(raw) as AppData;
       if (parsed && parsed.days && parsed.goals && parsed.profile) {
         // миграция со старых версий данных
-        return { ...parsed, customFoods: parsed.customFoods ?? [] };
+        return {
+          ...parsed,
+          customFoods: parsed.customFoods ?? [],
+          measures: parsed.measures ?? emptyMeasures(),
+          steps: parsed.steps ?? [],
+          activity: parsed.activity ?? [],
+          sleep: parsed.sleep ?? [],
+        };
       }
     }
   } catch {
@@ -205,3 +246,33 @@ export function saveState(data: AppData) {
 }
 
 export const fmt = (n: number) => n.toLocaleString("ru-RU");
+
+/** число с одним знаком, через запятую (для «7,5 ч», «81,4 кг») */
+export const ru1 = (n: number) => n.toFixed(1).replace(".", ",");
+
+/* ---------------- замеры тела, шаги, активность, сон ---------------- */
+
+export const MEASURE_KEYS: { id: MeasureKey; label: string }[] = [
+  { id: "chest", label: "Грудь" },
+  { id: "shoulders", label: "Плечи" },
+  { id: "waist", label: "Талия" },
+  { id: "belly", label: "Живот" },
+  { id: "hips", label: "Бёдра" },
+  { id: "leg", label: "Нога" },
+  { id: "arm", label: "Рука" },
+];
+
+export const emptyMeasures = (): Record<MeasureKey, MeasureEntry[]> => ({
+  chest: [],
+  shoulders: [],
+  waist: [],
+  belly: [],
+  hips: [],
+  leg: [],
+  arm: [],
+});
+
+/** заменить запись за дату или добавить новую */
+export function upsertByDate<T extends { date: string }>(list: T[], entry: T): T[] {
+  return [...list.filter((x) => x.date !== entry.date), entry];
+}
