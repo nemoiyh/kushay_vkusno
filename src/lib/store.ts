@@ -209,6 +209,7 @@ function seedState(): AppData {
       { date: shiftKey(t, -2), hours: 6.7, quality: "ok" },
       { date: shiftKey(t, -1), hours: 8.1, quality: "good" },
     ] as SleepEntry[],
+    statsVisibility: defaultStatsVisibility(),
   };
 }
 
@@ -226,6 +227,7 @@ export function loadState(): AppData {
           steps: parsed.steps ?? [],
           activity: parsed.activity ?? [],
           sleep: parsed.sleep ?? [],
+          statsVisibility: { ...defaultStatsVisibility(), ...(parsed.statsVisibility ?? {}) },
         };
       }
     }
@@ -270,6 +272,17 @@ export const emptyMeasures = (): Record<MeasureKey, MeasureEntry[]> => ({
   hips: [],
   leg: [],
   arm: [],
+});
+
+export const defaultStatsVisibility = (): AppData["statsVisibility"] => ({
+  weight: true,
+  measures: true,
+  calories: true,
+  macros: true,
+  water: true,
+  activity: true,
+  steps: true,
+  sleep: true,
 });
 
 /** заменить запись за дату или добавить новую */

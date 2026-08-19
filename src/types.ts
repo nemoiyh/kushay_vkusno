@@ -54,6 +54,17 @@ export interface WeightEntry {
   value: number;
 }
 
+/** блоки страницы «Статистика», видимостью которых можно управлять */
+export type StatsBlockKey =
+  | "weight"
+  | "measures"
+  | "calories"
+  | "macros"
+  | "water"
+  | "activity"
+  | "steps"
+  | "sleep";
+
 /** ключи замеров тела */
 export type MeasureKey =
   | "chest"
@@ -98,6 +109,8 @@ export interface AppData {
   steps: StepsEntry[];
   activity: ActivityEntry[];
   sleep: SleepEntry[];
+  /** какие блоки показывать на странице «Статистика» */
+  statsVisibility: Record<StatsBlockKey, boolean>;
 }
 
 export type ToastKind = "success" | "error" | "info";

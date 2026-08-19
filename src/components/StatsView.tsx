@@ -58,6 +58,7 @@ export function StatsView({
   onActivity,
   onMeasures,
   onWeight,
+  onOpenSettings,
 }: {
   data: AppData;
   onSteps: (value: number) => void;
@@ -65,6 +66,7 @@ export function StatsView({
   onActivity: (minutes: number, kcal: number) => void;
   onMeasures: (vals: Partial<Record<MeasureKey, number>>) => void;
   onWeight: (value: number) => void;
+  onOpenSettings: () => void;
 }) {
   const today = todayKey();
   const [period, setPeriod] = useState<Period>(7);
