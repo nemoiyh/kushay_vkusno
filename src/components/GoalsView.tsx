@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import type { AppData, Goals, Profile, Sex } from "../types";
 import { fmt } from "../lib/store";
-import { IAlert } from "./Icons";
 
 const ACTIVITIES = [
   { v: 1.2, label: "Минимум движения" },
@@ -21,8 +20,7 @@ export function GoalsView({
 }) {
   const { goals, profile } = data;
 
-  const kcalFromMacros = Math.round(goals.p * 4 + goals.f * 9 + goals.c * 4);
-  const mismatch = Math.abs(kcalFromMacros - goals.kcal) / goals.kcal > 0.1;
+
 
   const setGoal = (patch: Partial<Goals>) => onUpdateGoals({ ...goals, ...patch });
   const setProf = (patch: Partial<Profile>) => onUpdateProfile({ ...profile, ...patch });
@@ -97,29 +95,6 @@ export function GoalsView({
             ))}
           </div>
 
-          <p className={`mt-3 flex items-start gap-1.5 text-[11px] leading-snug ${mismatch ? "text-amber" : "text-faint"}`}>
-            {mismatch && <IAlert width={13} height={13} className="mt-px shrink-0" />}
-            БЖУ дают ≈ {fmt(kcalFromMacros)} ккал.
-            {mismatch
-              ? " Заметное расхождение с целью — сбалансируйте макросы."
-              : " Расхождение с целью в пределах нормы."}
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {[
-              ["Дефицит −15%", 0.85],
-              ["Поддержание", 1],
-              ["Набор +10%", 1.1],
-            ].map(([label, k]) => (
-              <button
-                key={label as string}
-                onClick={() => applySplit(goals.kcal * (k as number))}
-                className="btn-press rounded-full border border-line bg-field px-3 py-1.5 text-xs font-semibold text-soft hover:text-ink"
-              >
-                {label as string}
-              </button>
-            ))}
-          </div>
         </section>
 
         {/* калькулятор */}
