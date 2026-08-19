@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { AppData, Goals, Profile, Sex } from "../types";
-import { fmt, humanDate, round1, todayKey } from "../lib/store";
-import { IAlert, IPlus, IScale, ITrash } from "./Icons";
+import { fmt } from "../lib/store";
+import { IAlert } from "./Icons";
 
 const ACTIVITIES = [
   { v: 1.2, label: "Минимум движения" },
@@ -14,18 +14,12 @@ export function GoalsView({
   data,
   onUpdateGoals,
   onUpdateProfile,
-  onAddWeight,
-  onDeleteWeight,
 }: {
   data: AppData;
   onUpdateGoals: (g: Goals) => void;
   onUpdateProfile: (p: Profile) => void;
-  onAddWeight: (value: number) => void;
-  onDeleteWeight: (date: string) => void;
 }) {
   const { goals, profile } = data;
-  const [weightInput, setWeightInput] = useState("");
-  const [weightErr, setWeightErr] = useState("");
 
   const kcalFromMacros = Math.round(goals.p * 4 + goals.f * 9 + goals.c * 4);
   const mismatch = Math.abs(kcalFromMacros - goals.kcal) / goals.kcal > 0.1;
@@ -46,22 +40,6 @@ export function GoalsView({
       10 * profile.weight + 6.25 * profile.height - 5 * profile.age + (profile.sex === "male" ? 5 : -161);
     return Math.round(bmr * profile.activity);
   }, [profile]);
-
-  const addWeight = () => {
-    const v = parseFloat(weightInput.replace(",", "."));
-    if (!Number.isFinite(v) || v < 30 || v > 400) {
-      setWeightErr("Введите вес от 30 до 400 кг");
-      return;
-    }
-    setWeightErr("");
-    setWeightInput("");
-    onAddWeight(round1(v));
-  };
-
-  const weights = useMemo(
-    () => [...data.weights].sort((a, b) => b.date.localeCompare(a.date)),
-    [data.weights],
-  );
 
   return (
     <div className="anim-in">
@@ -221,51 +199,6 @@ export function GoalsView({
               Нажатие установит калории и БЖУ (30/30/40) как дневную цель.
             </p>
           </div>
-        </section>
-
-        {/* вес */}
-        <section className="card p-5">
-          <h2 className="flex items-center gap-1.5 font-display text-[13px] font-bold">
-            <IScale width={15} height={15} className="text-soft" /> Дневник веса
-          </h2>
-          <div className="mt-3 flex gap-2">
-            <input
-              className={`field flex-1 tabular-nums ${weightErr ? "field-invalid" : ""}`}
-              placeholder="Например, 80,5"
-              inputMode="decimal"
-              value={weightInput}
-              onChange={(e) => { setWeightInput(e.target.value); setWeightErr(""); }}
-              onKeyDown={(e) => e.key === "Enter" && addWeight()}
-            />
-            <button
-              onClick={addWeight}
-              className="btn-press flex items-center gap-1.5 rounded-xl bg-leaf px-4 py-2.5 text-sm font-bold text-paperink"
-            >
-              <IPlus width={15} height={15} /> Записать
-            </button>
-          </div>
-          {weightErr && <p className="mt-1.5 text-xs font-medium text-danger">{weightErr}</p>}
-          {weights.length > 0 ? (
-            <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">
-              {weights.map((w) => (
-                <li key={w.date} className="group flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-field">
-                  <span className="flex-1 text-soft">{humanDate(w.date)} <span className="text-[11px] text-faint">{w.date.split("-").reverse().join(".")}</span></span>
-                  <b className="tabular-nums">{w.value.toFixed(1)} кг</b>
-                  <button
-                    onClick={() => onDeleteWeight(w.date)}
-                    aria-label="Удалить замер"
-                    className="btn-press grid size-7 place-items-center rounded-md border border-line bg-card text-soft opacity-100 hover:text-danger sm:opacity-0 sm:group-hover:opacity-100"
-                  >
-                    <ITrash width={13} height={13} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-3 rounded-xl bg-paper px-3 py-2.5 text-xs text-faint">
-              Замеров пока нет. Первый запишется на сегодня ({humanDate(todayKey())}).
-            </p>
-          )}
         </section>
 
       </div>

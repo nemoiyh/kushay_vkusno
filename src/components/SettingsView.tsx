@@ -18,8 +18,6 @@ export function SettingsView({
   data,
   onUpdateGoals,
   onUpdateProfile,
-  onAddWeight,
-  onDeleteWeight,
   pwa,
   onExport,
   onReset,
@@ -27,8 +25,6 @@ export function SettingsView({
   data: AppData;
   onUpdateGoals: (g: Goals) => void;
   onUpdateProfile: (p: Profile) => void;
-  onAddWeight: (value: number) => void;
-  onDeleteWeight: (date: string) => void;
   pwa: PwaInfo;
   onExport: () => void;
   onReset: () => void;
@@ -54,14 +50,12 @@ export function SettingsView({
       <h1 className="font-display text-xl font-extrabold sm:text-2xl">Настройки</h1>
       <p className="mt-1 text-sm text-soft">Цели и профиль, данные, установка</p>
 
-      {/* цели, калькулятор нормы, профиль и вес */}
+      {/* цели, калькулятор нормы и профиль */}
       <div className="mt-5">
         <GoalsView
           data={data}
           onUpdateGoals={onUpdateGoals}
           onUpdateProfile={onUpdateProfile}
-          onAddWeight={onAddWeight}
-          onDeleteWeight={onDeleteWeight}
         />
       </div>
 

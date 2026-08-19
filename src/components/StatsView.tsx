@@ -57,12 +57,14 @@ export function StatsView({
   onSleep,
   onActivity,
   onMeasures,
+  onWeight,
 }: {
   data: AppData;
   onSteps: (value: number) => void;
   onSleep: (hours: number, quality?: SleepEntry["quality"]) => void;
   onActivity: (minutes: number, kcal: number) => void;
   onMeasures: (vals: Partial<Record<MeasureKey, number>>) => void;
+  onWeight: (value: number) => void;
 }) {
   const today = todayKey();
   const [period, setPeriod] = useState<Period>(7);
@@ -129,7 +131,7 @@ export function StatsView({
         {/* РЯД 1 · Вес + Замеры тела */}
         <section className="card p-5 sm:p-6">
           <div className="grid gap-6 lg:grid-cols-[1.25fr_1fr] lg:gap-0">
-            <WeightZone weights={weights} />
+            <WeightZone weights={weights} onWeight={onWeight} />
             <div className="border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <MeasuresZone measures={data.measures} onSave={onMeasures} />
             </div>
@@ -241,7 +243,10 @@ function smoothPath(pts: { x: number; y: number }[]): string {
   return d;
 }
 
-function WeightZone({ weights }: { weights: WeightEntry[] }) {
+function WeightZone({ weights, onWeight }: { weights: WeightEntry[]; onWeight: (value: number) => void }) {
+  const [input, setInput] = useState("");
+  const [err, setErr] = useState("");
+
   const last = weights[weights.length - 1];
   const prev = weights[weights.length - 2];
   const delta = last && prev ? Math.round((last.value - prev.value) * 10) / 10 : null;
@@ -259,6 +264,17 @@ function WeightZone({ weights }: { weights: WeightEntry[] }) {
   }));
   const line = smoothPath(pts);
   const area = weights.length > 1 ? `${line} L ${X1} 100 L ${X0} 100 Z` : "";
+
+  const save = () => {
+    const v = parseFloat(input.replace(",", "."));
+    if (!Number.isFinite(v) || v < 30 || v > 400) {
+      setErr("Введите вес от 30 до 400 кг");
+      return;
+    }
+    setErr("");
+    setInput("");
+    onWeight(Math.round(v * 10) / 10);
+  };
 
   return (
     <div className="lg:pr-6">
@@ -289,7 +305,7 @@ function WeightZone({ weights }: { weights: WeightEntry[] }) {
 
       {weights.length === 0 ? (
         <p className="mt-4 rounded-xl bg-paper px-3 py-4 text-center text-xs text-faint">
-          Замеров пока нет — добавьте вес в «Настройках»
+          Замеров пока нет — введите вес ниже, и здесь появится график
         </p>
       ) : (
         <>
@@ -321,6 +337,24 @@ function WeightZone({ weights }: { weights: WeightEntry[] }) {
           </p>
         </>
       )}
+
+      <div className="mt-4 flex items-center gap-2">
+        <input
+          className={`field h-9 min-w-0 flex-1 py-0 text-center text-[13px] tabular-nums ${err ? "field-invalid" : ""}`}
+          placeholder="Вес, напр. 80,5"
+          inputMode="decimal"
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setErr(""); }}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+        />
+        <button
+          onClick={save}
+          className="btn-press h-9 shrink-0 rounded-xl bg-leaf px-3.5 text-xs font-bold text-paperink"
+        >
+          Записать
+        </button>
+      </div>
+      {err && <p className="mt-1 text-[11px] font-medium text-danger">{err}</p>}
     </div>
   );
 }

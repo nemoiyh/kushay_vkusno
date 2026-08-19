@@ -219,6 +219,11 @@ export default function App() {
     toast(`Шаги записаны: ${fmt(Math.round(value))}`);
   }, [toast]);
 
+  const addWeight = useCallback((value: number) => {
+    setData((p) => ({ ...p, weights: upsertByDate(p.weights, { date: todayKey(), value }) }));
+    toast(`Вес ${value.toFixed(1).replace(".", ",")} кг записан`);
+  }, [toast]);
+
   const addSleep = useCallback((hours: number, quality?: SleepEntry["quality"]) => {
     setData((p) => ({ ...p, sleep: upsertByDate(p.sleep, { date: todayKey(), hours, quality }) }));
     toast(`Сон записан: ${ru1(hours)} ч`);
@@ -354,6 +359,7 @@ export default function App() {
                 onSleep={addSleep}
                 onActivity={addActivity}
                 onMeasures={addMeasures}
+                onWeight={addWeight}
               />
             )}
             {view === "settings" && (
@@ -361,17 +367,6 @@ export default function App() {
                 data={data}
                 onUpdateGoals={(g: Goals) => setData((p) => ({ ...p, goals: g }))}
                 onUpdateProfile={(pr: Profile) => setData((p) => ({ ...p, profile: pr }))}
-                onAddWeight={(value) => {
-                  setData((p) => ({
-                    ...p,
-                    weights: [...p.weights.filter((w) => w.date !== todayKey()), { date: todayKey(), value }],
-                  }));
-                  toast(`Вес ${value.toFixed(1)} кг записан`);
-                }}
-                onDeleteWeight={(date) => {
-                  setData((p) => ({ ...p, weights: p.weights.filter((w) => w.date !== date) }));
-                  toast("Замер удалён", "info");
-                }}
                 onExport={handleExport}
                 onReset={handleReset}
                 pwa={{ canInstall: !!pwaEvent, installed, promptInstall }}
