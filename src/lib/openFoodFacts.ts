@@ -1,5 +1,5 @@
 import type { Food } from "../types";
-import { round1 } from "./store";
+import { decodeEntities, round1 } from "./store";
 
 /**
  * Сервис для работы с открытым API Open Food Facts (world.openfoodfacts.org).
@@ -63,8 +63,8 @@ function normalize(raw: RawProduct): OffProduct | null {
 
   return {
     code,
-    name: name.slice(0, 90),
-    brand: raw.brands?.trim() || undefined,
+    name: decodeEntities(name).slice(0, 90),
+    brand: raw.brands ? decodeEntities(raw.brands.trim()) : undefined,
     categories: raw.categories?.trim() || undefined,
     kcal: Math.round(kcal ?? 0),
     p: round1(num(n.proteins_100g) ?? 0),

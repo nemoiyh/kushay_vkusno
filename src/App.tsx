@@ -7,6 +7,8 @@ import type {
   Meal,
   MeasureKey,
   Profile,
+  Recipe,
+  RecipeIngredient,
   SleepEntry,
   StatsBlockKey,
   ToastItem,
@@ -17,8 +19,10 @@ import {
   STORAGE_KEY,
   defaultMealByHour,
   fmt,
+  entryFromFood,
   loadState,
   mealLabel,
+  recipeTotals,
   ru1,
   saveState,
   shiftKey,
@@ -200,7 +204,7 @@ export default function App() {
   /* ------- свои продукты ------- */
 
   const saveCustomFood = useCallback((f: Omit<Food, "id">): Food => {
-    const food: Food = { ...f, id: uid() };
+    const food: Food = { ...f, id: uid(), createdAt: Date.now() };
     setData((prev) => {
       const rest = prev.customFoods.filter((x) => !(f.barcode && x.barcode === f.barcode));
       return { ...prev, customFoods: [food, ...rest] };
@@ -209,26 +213,91 @@ export default function App() {
   }, []);
 
   const deleteCustomFood = useCallback((id: string) => {
-    setData((prev) => ({ ...prev, customFoods: prev.customFoods.filter((f) => f.id !== id) }));
-    toast("Продукт удалён из «Мои продукты»", "info");
+    setData((prev) => ({
+      ...prev,
+      customFoods: prev.customFoods.filter((f) => f.id !== id),
+      favoriteIds: prev.favoriteIds.filter((x) => x !== id),
+    }));
+    toast("Продукт удалён из «Моих продуктов»", "info");
   }, [toast]);
 
   /** добавление продукта из Open Food Facts в локальную базу */
   const addOffFood = useCallback(
-    (food: Food) => {
+    (food: Food): Food => {
+      const withTs: Food = food.createdAt ? food : { ...food, createdAt: Date.now() };
       setData((prev) => {
         const rest = prev.customFoods.filter((x) => !(food.barcode && x.barcode === food.barcode));
-        return { ...prev, customFoods: [food, ...rest] };
+        return { ...prev, customFoods: [withTs, ...rest] };
       });
-      toast(`Продукт добавлен: ${food.name}`);
+      return withTs;
     },
-    [toast],
+    [],
   );
 
   const openCustomFood = useCallback(
     () => setDraft({ dateKey: dayKey, meal: defaultMealByHour(), custom: true, ts: Date.now() }),
     [dayKey],
   );
+
+  /* ------- избранное, блюда, добавление в приём пищи ------- */
+
+  const toggleFavorite = useCallback(
+    (id: string, name: string) => {
+      const has = data.favoriteIds.includes(id);
+      setData((p) => ({
+        ...p,
+        favoriteIds: has ? p.favoriteIds.filter((x) => x !== id) : [...p.favoriteIds, id],
+      }));
+      toast(has ? `«${name}» убран из избранного` : `«${name}» — в избранном`, has ? "info" : "success");
+    },
+    [data.favoriteIds, toast],
+  );
+
+  const pickFoodToMeal = useCallback(
+    (food: Food, meal: Meal) => {
+      const entry = entryFromFood(food, food.unit?.grams ?? 100, meal);
+      upsertDay(todayKey(), (d) => ({ ...d, entries: [...d.entries, entry] }));
+      toast(`${mealLabel(meal)}: ${food.name} · ${fmt(entry.kcal)} ккал`);
+    },
+    [toast],
+  );
+
+  const pickRecipeToMeal = useCallback(
+    (recipe: Recipe, meal: Meal) => {
+      const t = recipeTotals(recipe);
+      const entry: Entry = {
+        id: uid(),
+        foodId: recipe.id,
+        name: recipe.name,
+        grams: t.grams,
+        meal,
+        kcal: t.kcal,
+        p: t.p,
+        f: t.f,
+        c: t.c,
+        addedAt: Date.now(),
+      };
+      upsertDay(todayKey(), (d) => ({ ...d, entries: [...d.entries, entry] }));
+      toast(`${mealLabel(meal)}: ${recipe.name} · ${fmt(t.kcal)} ккал`);
+    },
+    [toast],
+  );
+
+  const addRecipe = useCallback(
+    (r: { name: string; ingredients: RecipeIngredient[] }) => {
+      setData((p) => ({
+        ...p,
+        recipes: [{ ...r, id: uid(), createdAt: Date.now() }, ...p.recipes],
+      }));
+      toast(`Блюдо «${r.name}» создано`);
+    },
+    [toast],
+  );
+
+  const deleteRecipe = useCallback((id: string) => {
+    setData((p) => ({ ...p, recipes: p.recipes.filter((r) => r.id !== id) }));
+    toast("Блюдо удалено", "info");
+  }, [toast]);
 
   /* ------- статистика: шаги, сон, активность, замеры ------- */
 
@@ -372,10 +441,17 @@ export default function App() {
             )}
             {view === "foods" && (
               <DatabaseView
-                onPick={openPick}
+                days={data.days}
                 customFoods={data.customFoods}
+                recipes={data.recipes}
+                favorites={data.favoriteIds}
+                onPickToMeal={pickFoodToMeal}
+                onPickRecipe={pickRecipeToMeal}
                 onDeleteCustomFood={deleteCustomFood}
+                onToggleFavorite={toggleFavorite}
                 onSaveOffFood={addOffFood}
+                onAddRecipe={addRecipe}
+                onDeleteRecipe={deleteRecipe}
                 onAddCustomFood={openCustomFood}
               />
             )}

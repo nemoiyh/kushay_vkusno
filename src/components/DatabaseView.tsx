@@ -1,19 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Food } from "../types";
-import { CATS, FOODS, PEREKRESTOK } from "../data/foods";
-import { fmt } from "../lib/store";
+import type { AppData, Food, Meal, Recipe, RecipeIngredient } from "../types";
+import { FOODS, findFood } from "../data/foods";
+import {
+  MEALS,
+  decodeEntities,
+  defaultMealByHour,
+  fmt,
+  recipeTotals,
+  round1,
+} from "../lib/store";
 import { searchProducts, toFood, type OffProduct } from "../lib/openFoodFacts";
+import { Modal } from "./ui";
+import { RecipeBuilderModal } from "./RecipeBuilderModal";
 import {
   IApple,
   IBarcode,
   ICheck,
+  IChevDown,
+  IClock,
   IGlobe,
   IPlus,
   ISearch,
-  IStore,
+  IStar,
   ITrash,
   IX,
 } from "./Icons";
+
+type Tab = "recent" | "favs" | "meals";
+
+const MEAL_DOT: Record<Meal, string> = {
+  breakfast: "var(--color-amber)",
+  lunch: "var(--color-leaf)",
+  dinner: "var(--color-teal)",
+  snack: "var(--color-carrot)",
+};
 
 type OffState =
   | { kind: "idle" }
@@ -22,27 +42,45 @@ type OffState =
   | { kind: "done"; results: OffProduct[] };
 
 export function DatabaseView({
-  onPick,
+  days,
   customFoods,
+  recipes,
+  favorites,
+  onPickToMeal,
+  onPickRecipe,
   onDeleteCustomFood,
+  onToggleFavorite,
   onSaveOffFood,
+  onAddRecipe,
+  onDeleteRecipe,
   onAddCustomFood,
 }: {
-  onPick: (food: Food) => void;
+  days: AppData["days"];
   customFoods: Food[];
+  recipes: Recipe[];
+  favorites: string[];
+  onPickToMeal: (food: Food, meal: Meal) => void;
+  onPickRecipe: (recipe: Recipe, meal: Meal) => void;
   onDeleteCustomFood: (id: string) => void;
-  onSaveOffFood: (food: Food) => void;
+  onToggleFavorite: (id: string, name: string) => void;
+  onSaveOffFood: (food: Food) => Food;
+  onAddRecipe: (r: { name: string; ingredients: RecipeIngredient[] }) => void;
+  onDeleteRecipe: (id: string) => void;
   onAddCustomFood: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [cat, setCat] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("recent");
+
+  /* ---- выбор приёма пищи ---- */
+  const [picker, setPicker] = useState<{ food?: Food; recipe?: Recipe } | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   /* ---- поиск в Open Food Facts (дебаунс 400 мс) ---- */
   const [off, setOff] = useState<OffState>({ kind: "idle" });
-  const [addedCodes, setAddedCodes] = useState<Set<string>>(new Set());
   const reqId = useRef(0);
-
   const trimmed = query.trim();
+
   useEffect(() => {
     if (trimmed.length < 3) {
       setOff({ kind: "idle" });
@@ -68,265 +106,422 @@ export function DatabaseView({
   }, [trimmed]);
 
   const retry = useCallback(() => {
-    // перезапуск эффекта через микросмену запроса не нужен — просто сбрасываем и ждём ввода;
-    // вместо этого вручную вызываем поиск
-    reqId.current++;
-    const id = reqId.current;
+    const id = ++reqId.current;
     setOff({ kind: "loading" });
     searchProducts(trimmed)
       .then((results) => id === reqId.current && setOff({ kind: "done", results }))
       .catch(() => id === reqId.current && setOff({ kind: "error" }));
   }, [trimmed]);
 
-  const handleAdd = (p: OffProduct) => {
-    onSaveOffFood(toFood(p));
-    setAddedCodes((s) => new Set(s).add(p.code));
-  };
-
-  /* ---- локальный список ---- */
-  const list = useMemo(() => {
+  /* ---- локальные совпадения по запросу ---- */
+  const localResults = useMemo(() => {
     const q = trimmed.toLowerCase();
-    return FOODS.filter(
-      (f) =>
-        (!cat || f.cat === cat) &&
-        (!q || f.name.toLowerCase().includes(q) || f.cat.toLowerCase().includes(q)),
-    ).sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }, [trimmed, cat]);
-
-  const customs = useMemo(() => {
-    const q = trimmed.toLowerCase();
-    const filtered = customFoods.filter((f) => !q || f.name.toLowerCase().includes(q));
-    return [...filtered].sort((a, b) => b.id.localeCompare(a.id) || a.name.localeCompare(b.name, "ru"));
+    if (!q) return [];
+    return [...customFoods, ...FOODS]
+      .filter((f) => f.name.toLowerCase().includes(q) || f.cat.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"))
+      .slice(0, 40);
   }, [trimmed, customFoods]);
 
-  const showOff = trimmed.length >= 3;
+  /* ---- недавние: из дневника + созданные вручную ---- */
+  const recent = useMemo(() => {
+    const map = new Map<string, { food: Food; ts: number }>();
+    Object.values(days).forEach((d) =>
+      d.entries.forEach((e) => {
+        const key = e.foodId ?? `n:${e.name}`;
+        const ex = map.get(key);
+        if (ex && e.addedAt <= ex.ts) return;
+        const base = e.foodId ? findFood(e.foodId, customFoods) : undefined;
+        const food: Food =
+          base ?? {
+            id: e.foodId ?? key,
+            name: e.name,
+            cat: "Недавние",
+            kcal: e.grams > 0 ? Math.round((e.kcal / e.grams) * 100) : e.kcal,
+            p: e.grams > 0 ? round1((e.p / e.grams) * 100) : e.p,
+            f: e.grams > 0 ? round1((e.f / e.grams) * 100) : e.f,
+            c: e.grams > 0 ? round1((e.c / e.grams) * 100) : e.c,
+          };
+        map.set(key, { food, ts: e.addedAt });
+      }),
+    );
+    customFoods.forEach((f) => {
+      const ts = f.createdAt ?? 0;
+      const ex = map.get(f.id);
+      if (!ex) map.set(f.id, { food: f, ts: Math.max(ts, 1) });
+      else if (ts > ex.ts) {
+        ex.food = f;
+        ex.ts = ts;
+      }
+    });
+    return [...map.values()].sort((a, b) => b.ts - a.ts).slice(0, 24).map((x) => x.food);
+  }, [days, customFoods]);
+
+  const favs = useMemo(
+    () =>
+      favorites
+        .map((id) => findFood(id, customFoods))
+        .filter((f): f is Food => Boolean(f)),
+    [favorites, customFoods],
+  );
+
+  const isFav = (id: string) => favorites.includes(id);
+  const isCustom = (id: string) => customFoods.some((f) => f.id === id);
+
+  /* OFF-товар перед добавлением сохраняем в базу */
+  const ensureSaved = (f: Food): Food =>
+    f.id.startsWith("off-") && !findFood(f.id, customFoods) ? onSaveOffFood(f) : f;
+
+  const openFood = (f: Food) => setPicker({ food: ensureSaved(f) });
+
+  const star = (f: Food) => {
+    const saved = ensureSaved(f);
+    onToggleFavorite(saved.id, decodeEntities(saved.name));
+  };
+
+  const searching = trimmed.length >= 3;
+
+  const TABS: { id: Tab; label: string; count: number }[] = [
+    { id: "recent", label: "Недавние", count: recent.length },
+    { id: "favs", label: "Избранное", count: favs.length },
+    { id: "meals", label: "Мои блюда", count: recipes.length },
+  ];
 
   return (
     <div className="anim-in">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-xl font-extrabold sm:text-2xl">Продукты</h1>
-          <p className="mt-1 text-sm text-soft">
-            {fmt(FOODS.length + customFoods.length)} продуктов · значения на 100 г · «+» — добавить в дневник
-          </p>
-        </div>
-        <span className="flex items-center gap-2 rounded-xl border border-leaf/35 bg-leafwash px-3 py-2 text-xs font-bold text-leafdeep hard-sm">
-          <IStore width={15} height={15} />
-          Каталог «Перекрёстка»: {fmt(PEREKRESTOK.length)} товаров
-        </span>
+      <div>
+        <h1 className="font-display text-xl font-extrabold sm:text-2xl">Продукты</h1>
+        <p className="mt-1 text-sm text-soft">
+          {fmt(FOODS.length + customFoods.length)} продуктов · значения на 100 г · «+» — добавить в дневник
+        </p>
       </div>
 
-      <div className="mt-4 flex flex-col gap-4">
-        <div className="relative">
-          <ISearch width={18} height={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
-          <input
-            className={`field field-search${query ? " field-search-with-clear" : ""}`}
-            placeholder="Поиск: курица, гречка, «Перекрёсток»…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              aria-label="Очистить поиск"
-              className="btn-press absolute right-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg border border-line bg-card text-soft hover:text-ink"
-            >
-              <IX width={13} height={13} />
-            </button>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <CatChip label="Все" active={cat === null} onClick={() => setCat(null)} />
-          {CATS.map((c) => (
-            <CatChip
-              key={c}
-              label={c}
-              active={cat === c}
-              store={c === "Перекрёсток"}
-              onClick={() => setCat(cat === c ? null : c)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ---- Open Food Facts ---- */}
-      {showOff && (
-        <section className="card mt-4 overflow-hidden">
-          <header className="flex items-center gap-2.5 border-b border-line bg-tealwash/50 px-4 py-2.5">
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-tealwash text-teal">
-              <IGlobe width={15} height={15} />
-            </span>
-            <h2 className="font-display text-xs font-bold">Open Food Facts</h2>
-            <span className="ml-auto text-[11px] text-faint tabular-nums">
-              {off.kind === "loading" && "ищем…"}
-              {off.kind === "done" && `${off.results.length} найдено`}
-            </span>
-          </header>
-
-          {off.kind === "loading" && (
-            <div className="flex items-center gap-2.5 px-4 py-5 text-sm text-soft">
-              <span className="spinner" />
-              Ищем «{trimmed}» в базе Open Food Facts…
-            </div>
-          )}
-
-          {off.kind === "error" && (
-            <div className="px-4 py-5 text-sm text-soft">
-              Нет соединения. Проверьте интернет для поиска в базе.{" "}
-              <button onClick={retry} className="font-bold text-teal underline-offset-2 hover:underline">
-                Повторить
-              </button>
-            </div>
-          )}
-
-          {off.kind === "done" && off.results.length === 0 && (
-            <div className="px-4 py-5">
-              <p className="text-sm text-soft">
-                Ничего не найдено в базе Open Food Facts. Попробуйте ввести название вручную или
-                проверьте штрихкод.
-              </p>
-              <button
-                onClick={onAddCustomFood}
-                className="btn-press mt-3 flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-paperink"
-              >
-                <IPlus width={15} height={15} /> Добавить вручную
-              </button>
-            </div>
-          )}
-
-          {off.kind === "done" && off.results.length > 0 && (
-            <div className="grid gap-3 p-4 sm:grid-cols-2">
-              {off.results.map((p, i) => (
-                <OffCard
-                  key={p.code}
-                  product={p}
-                  index={i}
-                  added={addedCodes.has(p.code)}
-                  onAdd={() => handleAdd(p)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ---- мои продукты ---- */}
-      {customFoods.length > 0 && !cat && (
-        <section className="card mt-4 overflow-hidden">
-          <header className="flex items-center gap-2 border-b border-line bg-field/70 px-4 py-2.5">
-            <span className="size-2 rounded-full bg-teal" />
-            <h2 className="font-display text-xs font-bold">
-              Мои продукты <span className="text-faint">({customFoods.length})</span>
-            </h2>
-            <span className="ml-auto text-[11px] text-faint">созданы вами, в т. ч. из Open Food Facts</span>
-          </header>
-          <ul>
-            {customs.map((f) => (
-              <li
-                key={f.id}
-                className="group grid grid-cols-[1fr_64px_44px_36px] items-center gap-2 border-b border-linesoft px-4 py-2.5 transition-colors last:border-0 hover:bg-field sm:grid-cols-[1fr_72px_56px_56px_56px_44px_36px]"
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  {f.image ? (
-                    <img src={f.image} alt="" loading="lazy" className="size-9 shrink-0 rounded-lg border border-line object-cover" />
-                  ) : (
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-paper text-faint">
-                      <IApple width={15} height={15} />
-                    </span>
-                  )}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 truncate text-sm font-semibold">
-                      {f.name}
-                      {f.barcode && <IBarcode width={12} height={12} className="shrink-0 text-faint" />}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-faint">
-                      {f.brand ? <span className="truncate">{f.brand}</span> : null}
-                      {f.barcode && <span className="tabular-nums">#{f.barcode}</span>}
-                    </div>
-                  </div>
-                </div>
-                <span className="text-right font-display text-sm font-bold text-carrot tabular-nums">{f.kcal}</span>
-                <span className="hidden text-right text-xs text-leaf tabular-nums sm:block">{f.p}</span>
-                <span className="hidden text-right text-xs text-amber tabular-nums sm:block">{f.f}</span>
-                <span className="hidden text-right text-xs text-teal tabular-nums sm:block">{f.c}</span>
-                <button
-                  onClick={() => onPick(f)}
-                  aria-label={`Добавить ${f.name} в дневник`}
-                  className="btn-press grid size-8 place-items-center rounded-lg border border-leaf/40 bg-leafwash text-leafdeep hover:bg-leaf hover:text-paperink"
-                >
-                  <IPlus width={15} height={15} />
-                </button>
-                <button
-                  onClick={() => onDeleteCustomFood(f.id)}
-                  aria-label={`Удалить ${f.name}`}
-                  className="btn-press grid size-8 place-items-center rounded-lg border border-line bg-card text-soft hover:text-danger"
-                >
-                  <ITrash width={14} height={14} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* ---- основная база ---- */}
-      <div className="card mt-4 overflow-hidden">
-        <div className="hidden grid-cols-[1fr_72px_56px_56px_56px_44px] gap-2 border-b border-line bg-field/70 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-faint sm:grid">
-          <span>Продукт</span>
-          <span className="text-right">ккал</span>
-          <span className="text-right text-leaf">Б</span>
-          <span className="text-right text-amber">Ж</span>
-          <span className="text-right text-teal">У</span>
-          <span />
-        </div>
-        {list.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
-            <IApple width={34} height={34} className="text-faint" />
-            <p className="text-sm font-semibold">Ничего не нашлось</p>
-            <p className="max-w-xs text-xs text-faint">
-              Попробуйте изменить запрос или найдите товар в Open Food Facts выше — он появится в
-              «Моих продуктах».
-            </p>
-          </div>
-        ) : (
-          <ul>
-            {list.map((f, i) => (
-              <li
-                key={f.id}
-                className="anim-in group grid grid-cols-[1fr_64px_44px] items-center gap-2 border-b border-linesoft px-4 py-2.5 transition-colors last:border-0 hover:bg-field sm:grid-cols-[1fr_72px_56px_56px_56px_44px]"
-                style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{f.name}</div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-faint">
-                    <span
-                      className={`rounded-full px-1.5 py-px ${
-                        f.cat === "Перекрёсток" ? "bg-leafwash font-semibold text-leafdeep" : "bg-paper"
-                      }`}
-                    >
-                      {f.cat === "Перекрёсток" && <IStore width={10} height={10} className="mr-0.5 inline -translate-y-px" />}
-                      {f.cat}
-                    </span>
-                    {f.unit && <span>{f.unit.label} ≈ {f.unit.grams} г</span>}
-                  </div>
-                </div>
-                <span className="text-right font-display text-sm font-bold text-carrot tabular-nums">{f.kcal}</span>
-                <span className="hidden text-right text-xs text-leaf tabular-nums sm:block">{f.p}</span>
-                <span className="hidden text-right text-xs text-amber tabular-nums sm:block">{f.f}</span>
-                <span className="hidden text-right text-xs text-teal tabular-nums sm:block">{f.c}</span>
-                <button
-                  onClick={() => onPick(f)}
-                  aria-label={`Добавить ${f.name} в дневник`}
-                  className="btn-press grid size-8 place-items-center rounded-lg border border-leaf/40 bg-leafwash text-leafdeep hover:bg-leaf hover:text-paperink"
-                >
-                  <IPlus width={15} height={15} />
-                </button>
-              </li>
-            ))}
-          </ul>
+      {/* поиск */}
+      <div className="relative mt-4">
+        <ISearch width={18} height={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
+        <input
+          className={`field field-search${query ? " field-search-with-clear" : ""}`}
+          placeholder="Поиск: курица, гречка, молоко…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {query && (
+          <button
+            onClick={() => setQuery("")}
+            aria-label="Очистить поиск"
+            className="btn-press absolute right-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg border border-line bg-card text-soft hover:text-ink"
+          >
+            <IX width={13} height={13} />
+          </button>
         )}
       </div>
+
+      {searching ? (
+        <div className="mt-4 space-y-4">
+          {/* локальные совпадения */}
+          <section className="card overflow-hidden">
+            <header className="flex items-center gap-2 border-b border-line bg-field/70 px-4 py-2.5">
+              <span className="size-2 rounded-full bg-leaf" />
+              <h2 className="font-display text-xs font-bold">В базе приложения</h2>
+              <span className="ml-auto text-[11px] text-faint tabular-nums">{localResults.length}</span>
+            </header>
+            {localResults.length === 0 ? (
+              <p className="px-4 py-4 text-sm text-faint">Совпадений в локальной базе нет.</p>
+            ) : (
+              <ul>
+                {localResults.map((f) => (
+                  <FoodRow
+                    key={f.id}
+                    food={f}
+                    fav={isFav(f.id)}
+                    custom={isCustom(f.id)}
+                    onFav={() => star(f)}
+                    onAdd={() => openFood(f)}
+                    onDel={isCustom(f.id) ? () => onDeleteCustomFood(f.id) : undefined}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* Open Food Facts */}
+          <section className="card overflow-hidden">
+            <header className="flex items-center gap-2.5 border-b border-line bg-tealwash/50 px-4 py-2.5">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-tealwash text-teal">
+                <IGlobe width={15} height={15} />
+              </span>
+              <h2 className="font-display text-xs font-bold">Open Food Facts</h2>
+              <span className="ml-auto text-[11px] text-faint tabular-nums">
+                {off.kind === "loading" && "ищем…"}
+                {off.kind === "done" && `${off.results.length} найдено`}
+              </span>
+            </header>
+
+            {off.kind === "loading" && (
+              <div className="flex items-center gap-2.5 px-4 py-5 text-sm text-soft">
+                <span className="spinner" />
+                Ищем «{trimmed}» в базе Open Food Facts…
+              </div>
+            )}
+
+            {off.kind === "error" && (
+              <div className="px-4 py-5 text-sm text-soft">
+                Нет соединения. Проверьте интернет для поиска в базе.{" "}
+                <button onClick={retry} className="font-bold text-teal underline-offset-2 hover:underline">
+                  Повторить
+                </button>
+              </div>
+            )}
+
+            {off.kind === "done" && off.results.length === 0 && (
+              <div className="px-4 py-5">
+                <p className="text-sm text-soft">
+                  Ничего не найдено в базе Open Food Facts. Попробуйте ввести название вручную или
+                  проверьте штрихкод.
+                </p>
+                <button
+                  onClick={onAddCustomFood}
+                  className="btn-press mt-3 flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-paperink"
+                >
+                  <IPlus width={15} height={15} /> Добавить вручную
+                </button>
+              </div>
+            )}
+
+            {off.kind === "done" && off.results.length > 0 && (
+              <div className="grid gap-3 p-4 sm:grid-cols-2">
+                {off.results.map((p, i) => (
+                  <OffCard
+                    key={p.code}
+                    product={p}
+                    index={i}
+                    fav={isFav(`off-${p.code}`)}
+                    onFav={() => star(toFood(p))}
+                    onAdd={() => openFood(toFood(p))}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      ) : (
+        <>
+          {/* вкладки */}
+          <div className="mt-4 flex rounded-xl border border-line bg-card p-1 hard-sm">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-colors sm:text-[13px] ${
+                  tab === t.id ? "bg-ink text-paperink" : "text-soft hover:text-ink"
+                }`}
+              >
+                {t.label}
+                <span
+                  className={`rounded-full px-1.5 py-px text-[10px] tabular-nums ${
+                    tab === t.id ? "bg-paperink/20" : "bg-paper text-faint"
+                  }`}
+                >
+                  {t.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* контент вкладки */}
+          {tab === "recent" && (
+            <section className="card anim-in mt-4 overflow-hidden">
+              {recent.length === 0 ? (
+                <EmptyState
+                  icon={<IClock width={30} height={30} />}
+                  title="Пока ничего нет"
+                  text="Добавьте продукт в дневник или найдите его через поиск — он появится здесь для быстрого доступа."
+                />
+              ) : (
+                <ul>
+                  {recent.map((f) => (
+                    <FoodRow
+                      key={f.id}
+                      food={f}
+                      fav={isFav(f.id)}
+                      custom={isCustom(f.id)}
+                      onFav={() => star(f)}
+                      onAdd={() => openFood(f)}
+                      onDel={isCustom(f.id) ? () => onDeleteCustomFood(f.id) : undefined}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {tab === "favs" && (
+            <section className="card anim-in mt-4 overflow-hidden">
+              {favs.length === 0 ? (
+                <EmptyState
+                  icon={<IStar width={30} height={30} />}
+                  title="В избранном пусто"
+                  text="Отмечайте продукты звёздочкой в поиске или в «Недавних» — они соберутся здесь."
+                />
+              ) : (
+                <ul>
+                  {favs.map((f) => (
+                    <FoodRow
+                      key={f.id}
+                      food={f}
+                      fav
+                      custom={isCustom(f.id)}
+                      onFav={() => star(f)}
+                      onAdd={() => openFood(f)}
+                      onDel={isCustom(f.id) ? () => onDeleteCustomFood(f.id) : undefined}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {tab === "meals" && (
+            <div className="anim-in mt-4 space-y-4">
+              <button
+                onClick={() => setBuilderOpen(true)}
+                className="btn-press flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-leaf/50 bg-leafwash/40 py-4 font-display text-sm font-bold text-leafdeep transition-colors hover:bg-leafwash"
+              >
+                <IPlus width={17} height={17} /> Создать блюдо
+              </button>
+
+              {recipes.length === 0 ? (
+                <EmptyState
+                  icon={<IApple width={30} height={30} />}
+                  title="Составных блюд пока нет"
+                  text="Соберите «Борщ домашний» или «Омлет» из ингредиентов — КБЖУ посчитается автоматически, а добавлять блюдо в дневник можно одной кнопкой."
+                />
+              ) : (
+                <ul className="space-y-4">
+                  {recipes.map((r) => (
+                    <RecipeCard
+                      key={r.id}
+                      recipe={r}
+                      expanded={expanded === r.id}
+                      onToggle={() => setExpanded((e) => (e === r.id ? null : r.id))}
+                      onAdd={() => setPicker({ recipe: r })}
+                      onDelete={() => onDeleteRecipe(r.id)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* выбор приёма пищи */}
+      {picker && (
+        <MealPicker
+          title={picker.food ? decodeEntities(picker.food.name) : picker.recipe!.name}
+          onClose={() => setPicker(null)}
+          onPick={(meal) => {
+            if (picker.food) onPickToMeal(picker.food, meal);
+            else if (picker.recipe) onPickRecipe(picker.recipe, meal);
+            setPicker(null);
+          }}
+        />
+      )}
+
+      {builderOpen && (
+        <RecipeBuilderModal
+          customFoods={customFoods}
+          onClose={() => setBuilderOpen(false)}
+          onSave={(r) => {
+            onAddRecipe(r);
+            setBuilderOpen(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/* ---------- строка продукта ---------- */
+
+function FoodRow({
+  food,
+  fav,
+  custom,
+  onFav,
+  onAdd,
+  onDel,
+}: {
+  food: Food;
+  fav: boolean;
+  custom: boolean;
+  onFav: () => void;
+  onAdd: () => void;
+  onDel?: () => void;
+}) {
+  return (
+    <li className="group flex items-center gap-2.5 border-b border-linesoft px-3.5 py-2.5 transition-colors last:border-0 hover:bg-field sm:gap-3 sm:px-4">
+      <StarBtn on={fav} onClick={onFav} name={food.name} />
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        {food.image ? (
+          <img src={food.image} alt="" loading="lazy" className="size-9 shrink-0 rounded-lg border border-line object-cover" />
+        ) : (
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-paper text-faint">
+            <IApple width={15} height={15} />
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 truncate text-sm font-semibold">
+            <span className="truncate">{decodeEntities(food.name)}</span>
+            {food.barcode && <IBarcode width={12} height={12} className="shrink-0 text-faint" />}
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-faint">
+            <span className="shrink-0 rounded-full bg-paper px-1.5 py-px">{food.cat}</span>
+            {food.brand && <span className="truncate">{decodeEntities(food.brand)}</span>}
+            <span className="shrink-0 tabular-nums">Б {food.p} · Ж {food.f} · У {food.c}</span>
+          </div>
+        </div>
+      </div>
+      <div className="shrink-0 text-right">
+        <div className="font-display text-sm font-bold text-carrot tabular-nums">{food.kcal}</div>
+        <div className="text-[10px] text-faint">ккал/100 г</div>
+      </div>
+      {onDel && (
+        <button
+          onClick={onDel}
+          aria-label={`Удалить ${food.name}`}
+          className="btn-press grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-card text-soft hover:text-danger"
+        >
+          <ITrash width={14} height={14} />
+        </button>
+      )}
+      <button
+        onClick={onAdd}
+        aria-label={`Добавить ${food.name} в дневник`}
+        className="btn-press grid size-9 shrink-0 place-items-center rounded-lg border border-leaf/40 bg-leafwash text-leafdeep hover:bg-leaf hover:text-paperink"
+      >
+        <IPlus width={16} height={16} />
+      </button>
+    </li>
+  );
+}
+
+/* ---------- кнопка-звёздочка ---------- */
+
+function StarBtn({ on, onClick, name }: { on: boolean; onClick: () => void; name: string }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={on ? `Убрать ${name} из избранного` : `Добавить ${name} в избранное`}
+      aria-pressed={on}
+      className={`btn-press grid size-8 shrink-0 place-items-center rounded-lg border transition-colors ${
+        on
+          ? "border-amber/50 bg-amberwash text-amber"
+          : "border-line bg-card text-faint hover:text-amber"
+      }`}
+    >
+      <IStar width={15} height={15} fill={on ? "var(--color-amber)" : "none"} strokeWidth={1.8} />
+    </button>
   );
 }
 
@@ -335,12 +530,14 @@ export function DatabaseView({
 function OffCard({
   product,
   index,
-  added,
+  fav,
+  onFav,
   onAdd,
 }: {
   product: OffProduct;
   index: number;
-  added: boolean;
+  fav: boolean;
+  onFav: () => void;
   onAdd: () => void;
 }) {
   return (
@@ -361,54 +558,155 @@ function OffCard({
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <div className="line-clamp-2 text-sm font-semibold leading-snug">{product.name}</div>
-        {product.brand && <div className="truncate text-[11px] text-faint">{product.brand}</div>}
+        <div className="line-clamp-2 text-sm font-semibold leading-snug">{decodeEntities(product.name)}</div>
+        {product.brand && <div className="truncate text-[11px] text-faint">{decodeEntities(product.brand)}</div>}
         <div className="mt-1 flex items-baseline gap-1.5">
           <span className="font-display text-base font-extrabold text-carrot tabular-nums">{product.kcal}</span>
           <span className="text-[11px] text-faint">ккал / 100 г</span>
         </div>
         <div className="mt-0.5 text-[10px] text-faint">Источник: Open Food Facts</div>
       </div>
-      <button
-        onClick={onAdd}
-        disabled={added}
-        aria-label={added ? "Уже добавлен" : `Добавить ${product.name} в базу`}
-        className={`btn-press grid size-9 shrink-0 place-items-center rounded-lg ${
-          added
-            ? "border border-leaf/40 bg-leafwash text-leafdeep"
-            : "bg-teal text-paperink hover:bg-leaf"
-        }`}
-      >
-        {added ? <ICheck width={16} height={16} /> : <IPlus width={17} height={17} />}
-      </button>
+      <div className="flex shrink-0 flex-col gap-1.5">
+        <StarBtn on={fav} onClick={onFav} name={product.name} />
+        <button
+          onClick={onAdd}
+          aria-label={`Добавить ${product.name} в дневник`}
+          className="btn-press grid size-8 place-items-center rounded-lg bg-teal text-paperink hover:bg-leaf"
+        >
+          <IPlus width={16} height={16} />
+        </button>
+      </div>
     </div>
   );
 }
 
-function CatChip({
-  label,
-  active,
-  onClick,
-  store,
+/* ---------- карточка блюда ---------- */
+
+function RecipeCard({
+  recipe,
+  expanded,
+  onToggle,
+  onAdd,
+  onDelete,
 }: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  store?: boolean;
+  recipe: Recipe;
+  expanded: boolean;
+  onToggle: () => void;
+  onAdd: () => void;
+  onDelete: () => void;
 }) {
+  const t = recipeTotals(recipe);
   return (
-    <button
-      onClick={onClick}
-      className={`btn-press flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold ${
-        active
-          ? "border-ink bg-ink text-paperink"
-          : store
-            ? "border-leaf/40 bg-leafwash text-leafdeep hover:border-leaf"
-            : "border-line bg-card text-soft hover:text-ink"
-      }`}
-    >
-      {store && <IStore width={12} height={12} />}
-      {label}
-    </button>
+    <li className="card anim-in overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <button
+          onClick={onToggle}
+          aria-label={expanded ? "Свернуть ингредиенты" : "Показать ингредиенты"}
+          className="btn-press grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-field text-soft"
+        >
+          <IChevDown
+            width={16}
+            height={16}
+            className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-display text-sm font-bold">{recipe.name}</div>
+          <div className="text-[11px] text-faint tabular-nums">
+            {recipe.ingredients.length} ингр. · {fmt(t.grams)} г
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="font-display text-base font-extrabold text-carrot tabular-nums">{fmt(t.kcal)}</div>
+          <div className="text-[10px] text-faint">ккал</div>
+        </div>
+        <button
+          onClick={onDelete}
+          aria-label={`Удалить блюдо ${recipe.name}`}
+          className="btn-press grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-card text-soft hover:text-danger"
+        >
+          <ITrash width={14} height={14} />
+        </button>
+        <button
+          onClick={onAdd}
+          aria-label={`Добавить ${recipe.name} в дневник`}
+          className="btn-press grid size-9 shrink-0 place-items-center rounded-lg border border-leaf/40 bg-leafwash text-leafdeep hover:bg-leaf hover:text-paperink"
+        >
+          <IPlus width={16} height={16} />
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="anim-in border-t border-dashed border-line bg-field/50 px-4 py-3">
+          <ul className="space-y-1">
+            {recipe.ingredients.map((ing, i) => (
+              <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="truncate text-soft">{ing.name}</span>
+                <span className="shrink-0 text-xs text-faint tabular-nums">{ing.grams} г</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px] font-semibold tabular-nums">
+            <span className="rounded-full bg-leafwash px-2 py-0.5 text-leafdeep">Б {t.p}</span>
+            <span className="rounded-full bg-amberwash px-2 py-0.5 text-amber">Ж {t.f}</span>
+            <span className="rounded-full bg-tealwash px-2 py-0.5 text-teal">У {t.c}</span>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+/* ---------- выбор приёма пищи ---------- */
+
+function MealPicker({
+  title,
+  onClose,
+  onPick,
+}: {
+  title: string;
+  onClose: () => void;
+  onPick: (m: Meal) => void;
+}) {
+  const def = defaultMealByHour();
+  return (
+    <Modal title="Куда добавить?" subtitle={title} onClose={onClose}>
+      <div className="grid grid-cols-2 gap-2.5">
+        {MEALS.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => onPick(m.id)}
+            className="btn-press relative flex flex-col items-start gap-1 rounded-xl border border-line bg-field p-4 text-left transition-colors hover:border-leaf hover:bg-leafwash/40"
+          >
+            {m.id === def && (
+              <span className="absolute right-2.5 top-2.5 rounded-full bg-leafwash px-2 py-0.5 text-[10px] font-bold text-leafdeep">
+                сейчас
+              </span>
+            )}
+            <span className="flex items-center gap-2 font-display text-sm font-bold">
+              <span className="size-2.5 rounded-full" style={{ background: MEAL_DOT[m.id] }} />
+              {m.label}
+            </span>
+            <span className="text-[11px] text-faint">{m.hint}</span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-3 flex items-center gap-1.5 text-[11px] text-faint">
+        <ICheck width={12} height={12} className="text-leaf" />
+        Продукт попадёт в дневник за сегодня. Изменить вес можно в дневнике.
+      </p>
+    </Modal>
+  );
+}
+
+/* ---------- пустое состояние ---------- */
+
+function EmptyState({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+      <span className="text-faint">{icon}</span>
+      <p className="text-sm font-semibold">{title}</p>
+      <p className="max-w-sm text-xs leading-relaxed text-faint">{text}</p>
+    </div>
   );
 }

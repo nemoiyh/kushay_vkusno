@@ -14,6 +14,8 @@ export interface Food {
   unit?: { label: string; grams: number };
   /** штрихкод EAN-13 / EAN-8, если известен */
   barcode?: string;
+  /** когда продукт создан пользователем (для вкладки «Недавние») */
+  createdAt?: number;
   /** бренд / производитель (из Open Food Facts) */
   brand?: string;
   /** миниатюра товара (из Open Food Facts) */
@@ -103,6 +105,25 @@ export interface SleepEntry {
   quality?: "good" | "ok" | "bad";
 }
 
+/** ингредиент составного блюда */
+export interface RecipeIngredient {
+  foodId?: string;
+  name: string;
+  grams: number;
+  kcal: number;
+  p: number;
+  f: number;
+  c: number;
+}
+
+/** составное блюдо («Мои блюда») */
+export interface Recipe {
+  id: string;
+  name: string;
+  ingredients: RecipeIngredient[];
+  createdAt: number;
+}
+
 export interface AppData {
   days: Record<string, DayLog>;
   goals: Goals;
@@ -117,6 +138,10 @@ export interface AppData {
   sleep: SleepEntry[];
   /** какие блоки показывать на странице «Статистика» */
   statsVisibility: Record<StatsBlockKey, boolean>;
+  /** избранные продукты (id из базы или «Мои продукты») */
+  favoriteIds: string[];
+  /** составные блюда пользователя */
+  recipes: Recipe[];
 }
 
 export type ToastKind = "success" | "error" | "info";

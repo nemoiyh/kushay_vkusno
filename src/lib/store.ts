@@ -6,6 +6,8 @@ import type {
   Meal,
   MeasureEntry,
   MeasureKey,
+  Recipe,
+  RecipeIngredient,
   SleepEntry,
 } from "../types";
 import { findFood } from "../data/foods";
@@ -178,12 +180,37 @@ function seedState(): AppData {
     days[key] = { entries, water: SEED_WATER[i] ?? 4 };
   });
   const w = (offset: number, value: number) => ({ date: shiftKey(t, offset), value });
+
+  // демо-блюдо «Омлет с сыром» из ингредиентов базы
+  const ing = (id: string, grams: number): RecipeIngredient | null => {
+    const f = findFood(id);
+    if (!f) return null;
+    const k = grams / 100;
+    return {
+      foodId: f.id,
+      name: f.name,
+      grams,
+      kcal: Math.round(f.kcal * k),
+      p: round1(f.p * k),
+      f: round1(f.f * k),
+      c: round1(f.c * k),
+    };
+  };
+  const omelet = [ing("yaico", 110), ing("moloko", 50), ing("syr", 30)].filter(
+    (x): x is RecipeIngredient => x !== null,
+  );
+  const demoRecipes: Recipe[] = omelet.length
+    ? [{ id: uid(), name: "Омлет с сыром", ingredients: omelet, createdAt: Date.now() - 86400000 }]
+    : [];
+
   return {
     days,
     goals: { kcal: 2000, p: 100, f: 67, c: 200 },
     profile: { sex: "male", age: 28, height: 178, weight: 81.5, activity: 1.375 },
     weights: [w(-6, 82.3), w(-4, 81.9), w(-2, 81.6), w(-1, 81.4)],
     customFoods: [],
+    favoriteIds: ["grechka", "kur-grudka", "yabloko"],
+    recipes: demoRecipes,
     measures: {
       chest: [w(-24, 97.2), w(-8, 96.4)],
       shoulders: [w(-8, 118.5)],
@@ -228,6 +255,8 @@ export function loadState(): AppData {
           activity: parsed.activity ?? [],
           sleep: parsed.sleep ?? [],
           statsVisibility: { ...defaultStatsVisibility(), ...(parsed.statsVisibility ?? {}) },
+          favoriteIds: parsed.favoriteIds ?? [],
+          recipes: parsed.recipes ?? [],
         };
       }
     }
@@ -288,4 +317,33 @@ export const defaultStatsVisibility = (): AppData["statsVisibility"] => ({
 /** заменить запись за дату или добавить новую */
 export function upsertByDate<T extends { date: string }>(list: T[], entry: T): T[] {
   return [...list.filter((x) => x.date !== entry.date), entry];
+}
+
+/** расшифровать HTML-сущности («&quot;» → «"») в названиях из внешних API */
+export function decodeEntities(s: string): string {
+  if (!/&[a-zA-Z#0-9]+;/.test(s)) return s;
+  const el = document.createElement("textarea");
+  el.innerHTML = s;
+  return el.value;
+}
+
+/** суммарные КБЖУ и вес составного блюда */
+export function recipeTotals(r: Recipe) {
+  const t = r.ingredients.reduce(
+    (a, i) => ({
+      grams: a.grams + i.grams,
+      kcal: a.kcal + i.kcal,
+      p: a.p + i.p,
+      f: a.f + i.f,
+      c: a.c + i.c,
+    }),
+    { grams: 0, kcal: 0, p: 0, f: 0, c: 0 },
+  );
+  return {
+    grams: Math.round(t.grams),
+    kcal: Math.round(t.kcal),
+    p: round1(t.p),
+    f: round1(t.f),
+    c: round1(t.c),
+  };
 }
