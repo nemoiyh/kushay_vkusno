@@ -21,6 +21,7 @@ import { MacroBar } from "./ui";
 import {
   IActivity,
   IApple,
+  IChart,
   IDrop,
   IFlame,
   IFoot,
@@ -28,6 +29,7 @@ import {
   IPlus,
   IRuler,
   IScale,
+  ISettings,
   ITrendDown,
   ITrendUp,
 } from "./Icons";
@@ -59,6 +61,7 @@ export function StatsView({
   onMeasures,
   onWeight,
   onOpenSettings,
+  visibility,
 }: {
   data: AppData;
   onSteps: (value: number) => void;
@@ -67,6 +70,7 @@ export function StatsView({
   onMeasures: (vals: Partial<Record<MeasureKey, number>>) => void;
   onWeight: (value: number) => void;
   onOpenSettings: () => void;
+  visibility: AppData["statsVisibility"];
 }) {
   const today = todayKey();
   const [period, setPeriod] = useState<Period>(7);
@@ -129,76 +133,128 @@ export function StatsView({
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-5">
-        {/* РЯД 1 · Вес + Замеры тела */}
-        <section className="card p-5 sm:p-6">
-          <div className="grid gap-6 lg:grid-cols-[1.25fr_1fr] lg:gap-0">
-            <WeightZone weights={weights} onWeight={onWeight} />
-            <div className="border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-              <MeasuresZone measures={data.measures} onSave={onMeasures} />
+      {(() => {
+        const vis = visibility;
+        const showRow1 = vis.weight || vis.measures;
+        const showRow2 = vis.calories || vis.macros;
+        const showRow3 = vis.activity || vis.steps;
+        const showRow4 = vis.sleep || vis.water;
+        const anyOn = showRow1 || showRow2 || showRow3 || showRow4;
+
+        if (!anyOn) {
+          return (
+            <div className="card anim-in mt-5 flex flex-col items-center gap-3 px-6 py-14 text-center">
+              <span className="grid size-14 place-items-center rounded-2xl bg-paper text-faint">
+                <IChart width={28} height={28} />
+              </span>
+              <p className="text-sm font-bold">Все блоки статистики скрыты</p>
+              <p className="max-w-sm text-xs leading-relaxed text-faint">
+                Включите нужные виджеты в «Настройках» → «Статистика», и они появятся здесь.
+              </p>
+              <button
+                onClick={onOpenSettings}
+                className="btn-press mt-1 flex items-center gap-2 rounded-xl bg-leaf px-4 py-2.5 text-sm font-bold text-paperink"
+              >
+                <ISettings width={16} height={16} /> Открыть настройки
+              </button>
             </div>
+          );
+        }
+
+        return (
+          <div className="mt-5 flex flex-col gap-5">
+            {/* РЯД 1 · Вес + Замеры тела */}
+            {showRow1 && (
+              <section className="card p-5 sm:p-6">
+                <div className={`grid gap-6 ${vis.weight && vis.measures ? "lg:grid-cols-[1.25fr_1fr] lg:gap-0" : ""}`}>
+                  {vis.weight && <WeightZone weights={weights} onWeight={onWeight} />}
+                  {vis.measures && (
+                    <div className={vis.weight ? "border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}>
+                      <MeasuresZone measures={data.measures} onSave={onMeasures} />
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* РЯД 2 · Калории + БЖУ */}
+            {showRow2 && (
+              <section className="card p-5 sm:p-6">
+                <div className={`grid gap-6 ${vis.calories && vis.macros ? "lg:grid-cols-[1.6fr_1fr] lg:gap-0" : ""}`}>
+                  {vis.calories && (
+                    <CaloriesZone
+                      keys={keys}
+                      vals={dayVals}
+                      goal={data.goals.kcal}
+                      avgKcal={avgKcal}
+                      onGoal={onGoal}
+                      loggedCount={logged.length}
+                      streak={streak}
+                      showWeekdays={period === 7}
+                    />
+                  )}
+                  {vis.macros && (
+                    <div className={vis.calories ? "border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}>
+                      <MacrosZone
+                        avgP={avgP}
+                        avgF={avgF}
+                        avgC={avgC}
+                        goals={data.goals}
+                        period={period}
+                      />
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* РЯД 3 · Активность + Шаги — широкая карточка на всю ширину (50/50) */}
+            {showRow3 && (
+              <section className="card p-5 sm:p-6">
+                <div className={`grid grid-cols-1 gap-6 ${vis.activity && vis.steps ? "md:grid-cols-2 md:gap-0" : ""}`}>
+                  {vis.activity && (
+                    <ActivityZone
+                      vals={actVals}
+                      today={todayAct}
+                      onSave={onActivity}
+                      className={vis.steps ? "md:pr-6" : ""}
+                    />
+                  )}
+                  {vis.steps && (
+                    <StepsZone
+                      vals={stepsVals}
+                      avg={Math.round(avgOf(stepsVals))}
+                      today={todaySteps?.value}
+                      onSave={onSteps}
+                      className={vis.activity ? "border-t border-dashed border-line pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0" : ""}
+                    />
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* РЯД 4 · Сон и Вода — рядом, по 50% */}
+            {showRow4 && (
+              <div className="grid gap-5 md:grid-cols-2">
+                {vis.sleep && (
+                  <SleepZone
+                    vals={sleepVals}
+                    avg={avgOf(sleepVals)}
+                    today={todaySleep}
+                    onSave={onSleep}
+                  />
+                )}
+                {vis.water && (
+                  <WaterZone
+                    vals={waterVals}
+                    avg={avgOf(waterVals)}
+                  />
+                )}
+              </div>
+            )}
           </div>
-        </section>
-
-        {/* РЯД 2 · Калории + БЖУ */}
-        <section className="card p-5 sm:p-6">
-          <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:gap-0">
-            <CaloriesZone
-              keys={keys}
-              vals={dayVals}
-              goal={data.goals.kcal}
-              avgKcal={avgKcal}
-              onGoal={onGoal}
-              loggedCount={logged.length}
-              streak={streak}
-              showWeekdays={period === 7}
-            />
-            <div className="border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-              <MacrosZone
-                avgP={avgP}
-                avgF={avgF}
-                avgC={avgC}
-                goals={data.goals}
-                period={period}
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* РЯД 3 · Активность + Шаги — широкая карточка на всю ширину (50/50) */}
-        <section className="card p-5 sm:p-6">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-0">
-            <ActivityZone
-              vals={actVals}
-              today={todayAct}
-              onSave={onActivity}
-              className="md:pr-6"
-            />
-            <StepsZone
-              vals={stepsVals}
-              avg={Math.round(avgOf(stepsVals))}
-              today={todaySteps?.value}
-              onSave={onSteps}
-              className="border-t border-dashed border-line pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0"
-            />
-          </div>
-        </section>
-
-        {/* РЯД 4 · Сон и Вода — рядом, по 50% */}
-        <div className="grid gap-5 md:grid-cols-2">
-          <SleepZone
-            vals={sleepVals}
-            avg={avgOf(sleepVals)}
-            today={todaySleep}
-            onSave={onSleep}
-          />
-
-          <WaterZone
-            vals={waterVals}
-            avg={avgOf(waterVals)}
-          />
-        </div>
-      </div>
+        );
+      })()}
     </div>
   );
 }

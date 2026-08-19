@@ -8,6 +8,7 @@ import type {
   MeasureKey,
   Profile,
   SleepEntry,
+  StatsBlockKey,
   ToastItem,
   ToastKind,
   View,
@@ -245,6 +246,13 @@ export default function App() {
     toast("Замеры тела сохранены");
   }, [toast]);
 
+  const toggleStatBlock = useCallback((id: StatsBlockKey) => {
+    setData((p) => ({
+      ...p,
+      statsVisibility: { ...p.statsVisibility, [id]: !p.statsVisibility[id] },
+    }));
+  }, []);
+
   /* ------- рендер ------- */
 
   return (
@@ -360,6 +368,8 @@ export default function App() {
                 onActivity={addActivity}
                 onMeasures={addMeasures}
                 onWeight={addWeight}
+                onOpenSettings={() => setView("settings")}
+                visibility={data.statsVisibility}
               />
             )}
             {view === "settings" && (
@@ -370,6 +380,8 @@ export default function App() {
                 onExport={handleExport}
                 onReset={handleReset}
                 pwa={{ canInstall: !!pwaEvent, installed, promptInstall }}
+                statsVisibility={data.statsVisibility}
+                onToggleStat={toggleStatBlock}
               />
             )}
           </div>

@@ -78,6 +78,9 @@ export const ITrendDown = (p: P) => (
 export const ITrendUp = (p: P) => (
   <svg {...base(p)}><path d="m22 7-7.5 7.5-4-4L2 19" /><path d="M22 13v-6h-6" /></svg>
 );
+export const IChevDown = (p: P) => (
+  <svg {...base(p)}><path d="m6 9 6 6 6-6" /></svg>
+);
 export const IBarcode = (p: P) => (
   <svg {...base(p)}><path d="M4 6v12M8 6v12M11 6v12M15 6v12M20 6v12" /><path d="M17.5 6v12" strokeWidth={3} /></svg>
 );
