@@ -23,6 +23,7 @@ import {
   loadState,
   mealLabel,
   recipeTotals,
+  round1,
   ru1,
   saveState,
   shiftKey,
@@ -157,6 +158,22 @@ export default function App() {
     const editing = draft.entry;
     saveEntry(draft.dateKey, entry, editing?.id);
     setDraft(null);
+    // новая запись пополняет счётчик «частых»
+    if (!editing && entry.foodId) {
+      const fid = entry.foodId;
+      const grams = entry.grams;
+      setData((p) => ({
+        ...p,
+        usage: {
+          ...p.usage,
+          [fid]: {
+            count: (p.usage[fid]?.count ?? 0) + 1,
+            lastUsed: Date.now(),
+            grams: Math.round(grams),
+          },
+        },
+      }));
+    }
     toast(
       editing
         ? `Обновлено: ${entry.name} · ${fmt(entry.kcal)} ккал`
@@ -253,34 +270,52 @@ export default function App() {
     [data.favoriteIds, toast],
   );
 
+  /** инкремент счётчика «частых» + запоминание последнего веса */
+  const bumpUsage = useCallback((id: string, grams: number) => {
+    setData((p) => ({
+      ...p,
+      usage: {
+        ...p.usage,
+        [id]: {
+          count: (p.usage[id]?.count ?? 0) + 1,
+          lastUsed: Date.now(),
+          grams: Math.round(grams),
+        },
+      },
+    }));
+  }, []);
+
   const pickFoodToMeal = useCallback(
-    (food: Food, meal: Meal) => {
-      const entry = entryFromFood(food, food.unit?.grams ?? 100, meal);
+    (food: Food, meal: Meal, grams: number) => {
+      const entry = entryFromFood(food, grams, meal);
       upsertDay(todayKey(), (d) => ({ ...d, entries: [...d.entries, entry] }));
+      bumpUsage(food.id, grams);
       toast(`${mealLabel(meal)}: ${food.name} · ${fmt(entry.kcal)} ккал`);
     },
-    [toast],
+    [toast, bumpUsage],
   );
 
   const pickRecipeToMeal = useCallback(
-    (recipe: Recipe, meal: Meal) => {
+    (recipe: Recipe, meal: Meal, grams: number) => {
       const t = recipeTotals(recipe);
+      const k = t.grams > 0 ? grams / t.grams : 1;
       const entry: Entry = {
         id: uid(),
         foodId: recipe.id,
         name: recipe.name,
-        grams: t.grams,
+        grams: Math.round(grams),
         meal,
-        kcal: t.kcal,
-        p: t.p,
-        f: t.f,
-        c: t.c,
+        kcal: Math.round(t.kcal * k),
+        p: round1(t.p * k),
+        f: round1(t.f * k),
+        c: round1(t.c * k),
         addedAt: Date.now(),
       };
       upsertDay(todayKey(), (d) => ({ ...d, entries: [...d.entries, entry] }));
-      toast(`${mealLabel(meal)}: ${recipe.name} · ${fmt(t.kcal)} ккал`);
+      bumpUsage(recipe.id, grams);
+      toast(`${mealLabel(meal)}: ${recipe.name} · ${fmt(entry.kcal)} ккал`);
     },
-    [toast],
+    [toast, bumpUsage],
   );
 
   const addRecipe = useCallback(
@@ -445,6 +480,7 @@ export default function App() {
                 customFoods={data.customFoods}
                 recipes={data.recipes}
                 favorites={data.favoriteIds}
+                usage={data.usage}
                 onPickToMeal={pickFoodToMeal}
                 onPickRecipe={pickRecipeToMeal}
                 onDeleteCustomFood={deleteCustomFood}

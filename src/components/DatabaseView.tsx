@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AppData, Food, Meal, Recipe, RecipeIngredient } from "../types";
+import type { AppData, Food, Meal, Recipe, RecipeIngredient, UsageInfo } from "../types";
 import { FOODS, findFood } from "../data/foods";
 import {
   MEALS,
@@ -18,6 +18,7 @@ import {
   ICheck,
   IChevDown,
   IClock,
+  IFlame,
   IGlobe,
   IPlus,
   ISearch,
@@ -26,7 +27,7 @@ import {
   IX,
 } from "./Icons";
 
-type Tab = "recent" | "favs" | "meals";
+type Tab = "recent" | "frequent" | "favs" | "meals";
 
 const MEAL_DOT: Record<Meal, string> = {
   breakfast: "var(--color-amber)",
@@ -34,6 +35,27 @@ const MEAL_DOT: Record<Meal, string> = {
   dinner: "var(--color-teal)",
   snack: "var(--color-carrot)",
 };
+
+const parseNum = (s: string) => {
+  const n = parseFloat(s.replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
+};
+
+/** блюдо → карточка продукта (КБЖУ на 100 г) для списков */
+function recipeToFood(r: Recipe): Food {
+  const t = recipeTotals(r);
+  const k = t.grams > 0 ? 100 / t.grams : 0;
+  return {
+    id: r.id,
+    name: r.name,
+    cat: "Мои блюда",
+    kcal: Math.round(t.kcal * k),
+    p: round1(t.p * k),
+    f: round1(t.f * k),
+    c: round1(t.c * k),
+    unit: { label: "порция", grams: t.grams },
+  };
+}
 
 type OffState =
   | { kind: "idle" }
@@ -46,6 +68,7 @@ export function DatabaseView({
   customFoods,
   recipes,
   favorites,
+  usage,
   onPickToMeal,
   onPickRecipe,
   onDeleteCustomFood,
@@ -59,8 +82,9 @@ export function DatabaseView({
   customFoods: Food[];
   recipes: Recipe[];
   favorites: string[];
-  onPickToMeal: (food: Food, meal: Meal) => void;
-  onPickRecipe: (recipe: Recipe, meal: Meal) => void;
+  usage: AppData["usage"];
+  onPickToMeal: (food: Food, meal: Meal, grams: number) => void;
+  onPickRecipe: (recipe: Recipe, meal: Meal, grams: number) => void;
   onDeleteCustomFood: (id: string) => void;
   onToggleFavorite: (id: string, name: string) => void;
   onSaveOffFood: (food: Food) => Food;
@@ -165,6 +189,24 @@ export function DatabaseView({
     [favorites, customFoods],
   );
 
+  /* частые: топ по счётчику использований */
+  const frequent = useMemo(
+    () =>
+      Object.entries(usage)
+        .filter(([, u]) => u.count > 0)
+        .sort((a, b) => b[1].count - a[1].count || b[1].lastUsed - a[1].lastUsed)
+        .slice(0, 20)
+        .map(([id, u]) => {
+          const food =
+            recipes.find((r) => r.id === id)
+              ? recipeToFood(recipes.find((r) => r.id === id)!)
+              : findFood(id, customFoods);
+          return food ? { food, u } : null;
+        })
+        .filter((x): x is { food: Food; u: UsageInfo } => x !== null),
+    [usage, customFoods, recipes],
+  );
+
   const isFav = (id: string) => favorites.includes(id);
   const isCustom = (id: string) => customFoods.some((f) => f.id === id);
 
@@ -183,6 +225,7 @@ export function DatabaseView({
 
   const TABS: { id: Tab; label: string; count: number }[] = [
     { id: "recent", label: "Недавние", count: recent.length },
+    { id: "frequent", label: "Частые", count: frequent.length },
     { id: "favs", label: "Избранное", count: favs.length },
     { id: "meals", label: "Мои блюда", count: recipes.length },
   ];
@@ -355,6 +398,38 @@ export function DatabaseView({
             </section>
           )}
 
+          {tab === "frequent" && (
+            <section className="card anim-in mt-4 overflow-hidden">
+              {frequent.length === 0 ? (
+                <EmptyState
+                  icon={<IFlame width={30} height={30} />}
+                  title="Частых продуктов пока нет"
+                  text="Каждый раз, когда вы добавляете продукт в дневник, мы считаем. Самые используемые появятся здесь — сверху самые частые."
+                />
+              ) : (
+                <ul>
+                  {frequent.map(({ food, u }) => (
+                    <FoodRow
+                      key={food.id}
+                      food={food}
+                      fav={isFav(food.id)}
+                      custom={isCustom(food.id)}
+                      onFav={() => star(food)}
+                      onAdd={() =>
+                        recipes.some((r) => r.id === food.id)
+                          ? setPicker({ recipe: recipes.find((r) => r.id === food.id)! })
+                          : openFood(food)
+                      }
+                      onDel={isCustom(food.id) ? () => onDeleteCustomFood(food.id) : undefined}
+                      badge={`×${u.count}`}
+                      metaLine={`добавлен ${u.count} ${u.count === 1 ? "раз" : u.count < 5 ? "раза" : "раз"}${u.grams ? ` · обычно ${u.grams} г` : ""}`}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
           {tab === "favs" && (
             <section className="card anim-in mt-4 overflow-hidden">
               {favs.length === 0 ? (
@@ -419,10 +494,12 @@ export function DatabaseView({
       {picker && (
         <MealPicker
           title={picker.food ? decodeEntities(picker.food.name) : picker.recipe!.name}
+          item={picker}
+          usage={picker.food ? usage[picker.food.id] : picker.recipe ? usage[picker.recipe.id] : undefined}
           onClose={() => setPicker(null)}
-          onPick={(meal) => {
-            if (picker.food) onPickToMeal(picker.food, meal);
-            else if (picker.recipe) onPickRecipe(picker.recipe, meal);
+          onPick={(meal, grams) => {
+            if (picker.food) onPickToMeal(picker.food, meal, grams);
+            else if (picker.recipe) onPickRecipe(picker.recipe, meal, grams);
             setPicker(null);
           }}
         />
@@ -451,6 +528,8 @@ function FoodRow({
   onFav,
   onAdd,
   onDel,
+  badge,
+  metaLine,
 }: {
   food: Food;
   fav: boolean;
@@ -458,6 +537,8 @@ function FoodRow({
   onFav: () => void;
   onAdd: () => void;
   onDel?: () => void;
+  badge?: string;
+  metaLine?: string;
 }) {
   return (
     <li className="group flex items-center gap-2.5 border-b border-linesoft px-3.5 py-2.5 transition-colors last:border-0 hover:bg-field sm:gap-3 sm:px-4">
@@ -475,13 +556,22 @@ function FoodRow({
             <span className="truncate">{decodeEntities(food.name)}</span>
             {food.barcode && <IBarcode width={12} height={12} className="shrink-0 text-faint" />}
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-faint">
-            <span className="shrink-0 rounded-full bg-paper px-1.5 py-px">{food.cat}</span>
-            {food.brand && <span className="truncate">{decodeEntities(food.brand)}</span>}
-            <span className="shrink-0 tabular-nums">Б {food.p} · Ж {food.f} · У {food.c}</span>
-          </div>
+          {metaLine ? (
+            <div className="truncate text-[11px] text-soft">{metaLine}</div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[11px] text-faint">
+              <span className="shrink-0 rounded-full bg-paper px-1.5 py-px">{food.cat}</span>
+              {food.brand && <span className="truncate">{decodeEntities(food.brand)}</span>}
+              <span className="shrink-0 tabular-nums">Б {food.p} · Ж {food.f} · У {food.c}</span>
+            </div>
+          )}
         </div>
       </div>
+      {badge && (
+        <span className="shrink-0 rounded-full bg-leafwash px-2 py-0.5 text-[11px] font-extrabold text-leafdeep tabular-nums">
+          {badge}
+        </span>
+      )}
       <div className="shrink-0 text-right">
         <div className="font-display text-sm font-bold text-carrot tabular-nums">{food.kcal}</div>
         <div className="text-[10px] text-faint">ккал/100 г</div>
@@ -657,44 +747,199 @@ function RecipeCard({
   );
 }
 
-/* ---------- выбор приёма пищи ---------- */
+/* ---------- выбор приёма пищи + граммовка ---------- */
 
 function MealPicker({
   title,
+  item,
+  usage,
   onClose,
   onPick,
 }: {
   title: string;
+  item: { food?: Food; recipe?: Recipe };
+  usage?: UsageInfo;
   onClose: () => void;
-  onPick: (m: Meal) => void;
+  onPick: (m: Meal, grams: number) => void;
 }) {
+  const { food, recipe } = item;
   const def = defaultMealByHour();
+  const [meal, setMeal] = useState<Meal>(def);
+
+  /* --- граммовка --- */
+  const totals = recipe ? recipeTotals(recipe) : null;
+  const per100 = food
+    ? { kcal: food.kcal, p: food.p, f: food.f, c: food.c }
+    : totals && totals.grams > 0
+      ? {
+          kcal: (totals.kcal / totals.grams) * 100,
+          p: (totals.p / totals.grams) * 100,
+          f: (totals.f / totals.grams) * 100,
+          c: (totals.c / totals.grams) * 100,
+        }
+      : { kcal: 0, p: 0, f: 0, c: 0 };
+
+  // подсказка последнего веса → предзаполняем
+  const defGrams =
+    usage?.grams ?? (food ? (food.unit?.grams ?? 100) : (totals ? totals.grams : 250));
+  const [gramsInput, setGramsInput] = useState(String(defGrams));
+  const [unitMode, setUnitMode] = useState(false);
+  const [pieces, setPieces] = useState("1");
+
+  const presets =
+    recipe && totals
+      ? [
+          { label: "½ порции", g: Math.max(1, Math.round(totals.grams / 2)) },
+          { label: "1 порция", g: totals.grams },
+          { label: "1½ порции", g: Math.round(totals.grams * 1.5) },
+          { label: "2 порции", g: totals.grams * 2 },
+        ]
+      : [50, 100, 150, 200].map((g) => ({ label: `${g} г`, g }));
+
+  const grams = (() => {
+    const raw =
+      unitMode && food?.unit
+        ? Math.max(0, Math.round(parseNum(pieces) || 0)) * food.unit.grams
+        : parseNum(gramsInput);
+    if (!Number.isFinite(raw)) return 0;
+    return Math.min(2000, Math.max(0, Math.round(raw)));
+  })();
+
+  const calc = {
+    kcal: Math.round((per100.kcal / 100) * grams),
+    p: round1((per100.p / 100) * grams),
+    f: round1((per100.f / 100) * grams),
+    c: round1((per100.c / 100) * grams),
+  };
+
+  const canSave = grams > 0;
+  const lastUsedDiffers = usage?.grams != null && usage.grams !== grams;
+
   return (
     <Modal title="Куда добавить?" subtitle={title} onClose={onClose}>
-      <div className="grid grid-cols-2 gap-2.5">
+      {/* шаг 1: приём пищи */}
+      <div className="grid grid-cols-2 gap-2">
         {MEALS.map((m) => (
           <button
             key={m.id}
-            onClick={() => onPick(m.id)}
-            className="btn-press relative flex flex-col items-start gap-1 rounded-xl border border-line bg-field p-4 text-left transition-colors hover:border-leaf hover:bg-leafwash/40"
+            onClick={() => setMeal(m.id)}
+            className={`btn-press relative flex flex-col items-start gap-0.5 rounded-xl border p-3 text-left transition-colors ${
+              meal === m.id
+                ? "border-leaf bg-leafwash/50"
+                : "border-line bg-field hover:border-leaf hover:bg-leafwash/30"
+            }`}
           >
             {m.id === def && (
-              <span className="absolute right-2.5 top-2.5 rounded-full bg-leafwash px-2 py-0.5 text-[10px] font-bold text-leafdeep">
+              <span className="absolute right-2 top-2 rounded-full bg-leafwash px-1.5 py-px text-[9px] font-bold text-leafdeep">
                 сейчас
               </span>
             )}
-            <span className="flex items-center gap-2 font-display text-sm font-bold">
+            <span className="flex items-center gap-2 font-display text-[13px] font-bold">
               <span className="size-2.5 rounded-full" style={{ background: MEAL_DOT[m.id] }} />
               {m.label}
             </span>
-            <span className="text-[11px] text-faint">{m.hint}</span>
+            <span className="text-[10px] text-faint">{m.hint}</span>
           </button>
         ))}
       </div>
-      <p className="mt-3 flex items-center gap-1.5 text-[11px] text-faint">
-        <ICheck width={12} height={12} className="text-leaf" />
-        Продукт попадёт в дневник за сегодня. Изменить вес можно в дневнике.
-      </p>
+
+      {/* шаг 2: граммовка */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-soft">Вес порции</span>
+          {lastUsedDiffers && (
+            <button
+              onClick={() => setGramsInput(String(usage!.grams))}
+              className="text-[11px] font-semibold text-leaf underline-offset-2 hover:underline"
+            >
+              раньше: {usage!.grams} г
+            </button>
+          )}
+        </div>
+
+        {/* переключатель граммы / штуки (для штучных продуктов) */}
+        {food?.unit && (
+          <div className="mt-2 grid grid-cols-2 rounded-xl border border-line bg-field p-0.5 text-[11px] font-bold">
+            <button
+              onClick={() => setUnitMode(false)}
+              className={`rounded-lg py-1.5 transition-colors ${!unitMode ? "bg-ink text-paperink" : "text-soft"}`}
+            >
+              В граммах
+            </button>
+            <button
+              onClick={() => setUnitMode(true)}
+              className={`rounded-lg py-1.5 transition-colors ${unitMode ? "bg-ink text-paperink" : "text-soft"}`}
+            >
+              В штуках ({food.unit.label})
+            </button>
+          </div>
+        )}
+
+        {/* пресеты */}
+        {!unitMode && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {presets.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => setGramsInput(String(p.g))}
+                className={`btn-press rounded-full border px-3 py-1.5 text-xs font-bold tabular-nums transition-colors ${
+                  grams === p.g
+                    ? "border-ink bg-ink text-paperink"
+                    : "border-line bg-card text-soft hover:text-ink"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ручной ввод */}
+        <div className="mt-2 flex items-center gap-2">
+          {unitMode && food?.unit ? (
+            <>
+              <input
+                className="field h-10 w-24 py-0 text-center text-sm font-bold tabular-nums"
+                inputMode="numeric"
+                value={pieces}
+                onChange={(e) => setPieces(e.target.value)}
+              />
+              <span className="text-xs text-soft tabular-nums">
+                шт × {food.unit.grams} г = {grams} г
+              </span>
+            </>
+          ) : (
+            <>
+              <input
+                className="field h-10 w-28 py-0 text-center text-sm font-bold tabular-nums"
+                inputMode="numeric"
+                value={gramsInput}
+                onChange={(e) => setGramsInput(e.target.value)}
+              />
+              <span className="text-sm font-semibold text-soft">г</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* живой расчёт КБЖУ */}
+      <div className="mt-4 flex items-center justify-between rounded-xl bg-paper px-4 py-3">
+        <span className="font-display text-lg font-extrabold text-carrot tabular-nums">
+          {calc.kcal} <span className="text-[11px] font-bold text-faint">ккал</span>
+        </span>
+        <span className="text-xs tabular-nums">
+          <b className="text-leaf">{calc.p}</b> Б · <b className="text-amber">{calc.f}</b> Ж ·{" "}
+          <b className="text-teal">{calc.c}</b> У
+        </span>
+      </div>
+
+      <button
+        onClick={() => canSave && onPick(meal, grams)}
+        disabled={!canSave}
+        className="btn-press mt-3 w-full rounded-xl bg-leaf py-3 font-display text-sm font-bold text-paperink disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Добавить в «{MEALS.find((m) => m.id === meal)?.label}»
+      </button>
     </Modal>
   );
 }

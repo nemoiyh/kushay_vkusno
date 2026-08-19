@@ -124,6 +124,14 @@ export interface Recipe {
   createdAt: number;
 }
 
+/** счётчик использований продукта/блюда в дневнике */
+export interface UsageInfo {
+  count: number;
+  lastUsed: number;
+  /** последний использованный вес, г — для подсказки при повторном добавлении */
+  grams?: number;
+}
+
 export interface AppData {
   days: Record<string, DayLog>;
   goals: Goals;
@@ -142,6 +150,8 @@ export interface AppData {
   favoriteIds: string[];
   /** составные блюда пользователя */
   recipes: Recipe[];
+  /** сколько раз и с каким весом продукт добавляли в дневник */
+  usage: Record<string, UsageInfo>;
 }
 
 export type ToastKind = "success" | "error" | "info";

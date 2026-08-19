@@ -203,6 +203,25 @@ function seedState(): AppData {
     ? [{ id: uid(), name: "Омлет с сыром", ingredients: omelet, createdAt: Date.now() - 86400000 }]
     : [];
 
+  // демо-счётчики «частых» продуктов (согласованы с демо-неделей дневника)
+  const usage: AppData["usage"] = {};
+  const u = (id: string, count: number, grams: number, daysAgo: number) => {
+    usage[id] = { count, lastUsed: Date.now() - daysAgo * 86400000 - 3600000, grams };
+  };
+  u("grechka", 12, 200, 1);
+  u("kur-grudka", 10, 150, 1);
+  u("yabloko", 9, 180, 2);
+  u("ovsyanka", 8, 250, 2);
+  u("yaico", 7, 110, 3);
+  u("tvorog-5", 6, 150, 3);
+  u("borsch", 5, 300, 4);
+  u("banan", 5, 120, 5);
+  u("kefir", 4, 250, 5);
+  u("losos", 3, 140, 6);
+  u("omlet", 3, 200, 6);
+  u("shaurma", 2, 350, 7);
+  if (demoRecipes[0]) u(demoRecipes[0].id, 4, demoRecipes[0].ingredients.reduce((s, i) => s + i.grams, 0), 4);
+
   return {
     days,
     goals: { kcal: 2000, p: 100, f: 67, c: 200 },
@@ -211,6 +230,7 @@ function seedState(): AppData {
     customFoods: [],
     favoriteIds: ["grechka", "kur-grudka", "yabloko"],
     recipes: demoRecipes,
+    usage,
     measures: {
       chest: [w(-24, 97.2), w(-8, 96.4)],
       shoulders: [w(-8, 118.5)],
@@ -257,6 +277,7 @@ export function loadState(): AppData {
           statsVisibility: { ...defaultStatsVisibility(), ...(parsed.statsVisibility ?? {}) },
           favoriteIds: parsed.favoriteIds ?? [],
           recipes: parsed.recipes ?? [],
+          usage: parsed.usage ?? {},
         };
       }
     }
