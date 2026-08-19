@@ -133,6 +133,21 @@ input[type="range"] { accent-color: var(--color-leaf); }
 }
 .scanline { animation: scanline 2.2s ease-in-out infinite; }
 
+/* спиннер загрузки (поиск в Open Food Facts) */
+@keyframes spin360 { to { transform: rotate(360deg); } }
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  border: 2px solid var(--color-linesoft);
+  border-top-color: var(--color-leaf);
+  animation: spin360 0.7s linear infinite;
+}
+
+/* аккуратное появление списка результатов */
+@keyframes fadeup { from { opacity: 0; transform: translateY(6px); } }
+.fadeup { animation: fadeup 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 .animate-fadein { animation: fadein 0.22s ease both; }
 .animate-rise { animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .anim-in { animation: slidein 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }

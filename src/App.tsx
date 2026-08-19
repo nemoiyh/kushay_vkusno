@@ -213,6 +213,23 @@ export default function App() {
     toast("Продукт удалён из «Мои продукты»", "info");
   }, [toast]);
 
+  /** добавление продукта из Open Food Facts в локальную базу */
+  const addOffFood = useCallback(
+    (food: Food) => {
+      setData((prev) => {
+        const rest = prev.customFoods.filter((x) => !(food.barcode && x.barcode === food.barcode));
+        return { ...prev, customFoods: [food, ...rest] };
+      });
+      toast(`Продукт добавлен: ${food.name}`);
+    },
+    [toast],
+  );
+
+  const openCustomFood = useCallback(
+    () => setDraft({ dateKey: dayKey, meal: defaultMealByHour(), custom: true, ts: Date.now() }),
+    [dayKey],
+  );
+
   /* ------- статистика: шаги, сон, активность, замеры ------- */
 
   const addSteps = useCallback((value: number) => {
@@ -358,6 +375,8 @@ export default function App() {
                 onPick={openPick}
                 customFoods={data.customFoods}
                 onDeleteCustomFood={deleteCustomFood}
+                onSaveOffFood={addOffFood}
+                onAddCustomFood={openCustomFood}
               />
             )}
             {view === "stats" && (

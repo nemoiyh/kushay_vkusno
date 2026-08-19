@@ -16,6 +16,7 @@ export interface EntryDraftInput {
   food?: Food;
   entry?: Entry; // режим редактирования
   barcode?: string; // подставлен из сканирования
+  custom?: boolean; // сразу открыть вкладку «Свой продукт»
 }
 
 type ScanStatus =
@@ -49,6 +50,7 @@ export function AddEntryModal({
 
   const [meal, setMeal] = useState<Meal>(input.meal);
   const [tab, setTab] = useState<"db" | "custom">(() => {
+    if (input.custom) return "custom";
     if (editing && !editingFood) return "custom";
     if (input.barcode && !initialFood) return "custom";
     // продукт из Open Food Facts ещё не в базе — сразу на вкладку «Свой продукт»

@@ -14,6 +14,12 @@ export interface Food {
   unit?: { label: string; grams: number };
   /** штрихкод EAN-13 / EAN-8, если известен */
   barcode?: string;
+  /** бренд / производитель (из Open Food Facts) */
+  brand?: string;
+  /** миниатюра товара (из Open Food Facts) */
+  image?: string;
+  /** откуда продукт импортирован */
+  source?: { type: string; original_id: string; url: string };
 }
 
 export interface Entry {

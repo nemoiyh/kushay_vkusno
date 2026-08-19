@@ -1,35 +1,105 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Food } from "../types";
 import { CATS, FOODS, PEREKRESTOK } from "../data/foods";
 import { fmt } from "../lib/store";
-import { IApple, IBarcode, IPlus, ISearch, IStore, ITrash, IX } from "./Icons";
+import { searchProducts, toFood, type OffProduct } from "../lib/openFoodFacts";
+import {
+  IApple,
+  IBarcode,
+  ICheck,
+  IGlobe,
+  IPlus,
+  ISearch,
+  IStore,
+  ITrash,
+  IX,
+} from "./Icons";
+
+type OffState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "error" }
+  | { kind: "done"; results: OffProduct[] };
 
 export function DatabaseView({
   onPick,
   customFoods,
   onDeleteCustomFood,
+  onSaveOffFood,
+  onAddCustomFood,
 }: {
   onPick: (food: Food) => void;
   customFoods: Food[];
   onDeleteCustomFood: (id: string) => void;
+  onSaveOffFood: (food: Food) => void;
+  onAddCustomFood: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<string | null>(null);
 
+  /* ---- поиск в Open Food Facts (дебаунс 400 мс) ---- */
+  const [off, setOff] = useState<OffState>({ kind: "idle" });
+  const [addedCodes, setAddedCodes] = useState<Set<string>>(new Set());
+  const reqId = useRef(0);
+
+  const trimmed = query.trim();
+  useEffect(() => {
+    if (trimmed.length < 3) {
+      setOff({ kind: "idle" });
+      return;
+    }
+    const id = ++reqId.current;
+    const ctrl = new AbortController();
+    setOff({ kind: "loading" });
+    const timer = window.setTimeout(async () => {
+      try {
+        const results = await searchProducts(trimmed, { signal: ctrl.signal });
+        if (id !== reqId.current) return;
+        setOff({ kind: "done", results });
+      } catch {
+        if (id !== reqId.current) return;
+        setOff({ kind: "error" });
+      }
+    }, 400);
+    return () => {
+      window.clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [trimmed]);
+
+  const retry = useCallback(() => {
+    // перезапуск эффекта через микросмену запроса не нужен — просто сбрасываем и ждём ввода;
+    // вместо этого вручную вызываем поиск
+    reqId.current++;
+    const id = reqId.current;
+    setOff({ kind: "loading" });
+    searchProducts(trimmed)
+      .then((results) => id === reqId.current && setOff({ kind: "done", results }))
+      .catch(() => id === reqId.current && setOff({ kind: "error" }));
+  }, [trimmed]);
+
+  const handleAdd = (p: OffProduct) => {
+    onSaveOffFood(toFood(p));
+    setAddedCodes((s) => new Set(s).add(p.code));
+  };
+
+  /* ---- локальный список ---- */
   const list = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = trimmed.toLowerCase();
     return FOODS.filter(
       (f) =>
         (!cat || f.cat === cat) &&
         (!q || f.name.toLowerCase().includes(q) || f.cat.toLowerCase().includes(q)),
     ).sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }, [query, cat]);
+  }, [trimmed, cat]);
 
   const customs = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = trimmed.toLowerCase();
     const filtered = customFoods.filter((f) => !q || f.name.toLowerCase().includes(q));
     return [...filtered].sort((a, b) => b.id.localeCompare(a.id) || a.name.localeCompare(b.name, "ru"));
-  }, [query, customFoods]);
+  }, [trimmed, customFoods]);
+
+  const showOff = trimmed.length >= 3;
 
   return (
     <div className="anim-in">
@@ -79,7 +149,68 @@ export function DatabaseView({
         </div>
       </div>
 
-      {/* мои продукты */}
+      {/* ---- Open Food Facts ---- */}
+      {showOff && (
+        <section className="card mt-4 overflow-hidden">
+          <header className="flex items-center gap-2.5 border-b border-line bg-tealwash/50 px-4 py-2.5">
+            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-tealwash text-teal">
+              <IGlobe width={15} height={15} />
+            </span>
+            <h2 className="font-display text-xs font-bold">Open Food Facts</h2>
+            <span className="ml-auto text-[11px] text-faint tabular-nums">
+              {off.kind === "loading" && "ищем…"}
+              {off.kind === "done" && `${off.results.length} найдено`}
+            </span>
+          </header>
+
+          {off.kind === "loading" && (
+            <div className="flex items-center gap-2.5 px-4 py-5 text-sm text-soft">
+              <span className="spinner" />
+              Ищем «{trimmed}» в базе Open Food Facts…
+            </div>
+          )}
+
+          {off.kind === "error" && (
+            <div className="px-4 py-5 text-sm text-soft">
+              Нет соединения. Проверьте интернет для поиска в базе.{" "}
+              <button onClick={retry} className="font-bold text-teal underline-offset-2 hover:underline">
+                Повторить
+              </button>
+            </div>
+          )}
+
+          {off.kind === "done" && off.results.length === 0 && (
+            <div className="px-4 py-5">
+              <p className="text-sm text-soft">
+                Ничего не найдено в базе Open Food Facts. Попробуйте ввести название вручную или
+                проверьте штрихкод.
+              </p>
+              <button
+                onClick={onAddCustomFood}
+                className="btn-press mt-3 flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-paperink"
+              >
+                <IPlus width={15} height={15} /> Добавить вручную
+              </button>
+            </div>
+          )}
+
+          {off.kind === "done" && off.results.length > 0 && (
+            <div className="grid gap-3 p-4 sm:grid-cols-2">
+              {off.results.map((p, i) => (
+                <OffCard
+                  key={p.code}
+                  product={p}
+                  index={i}
+                  added={addedCodes.has(p.code)}
+                  onAdd={() => handleAdd(p)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ---- мои продукты ---- */}
       {customFoods.length > 0 && !cat && (
         <section className="card mt-4 overflow-hidden">
           <header className="flex items-center gap-2 border-b border-line bg-field/70 px-4 py-2.5">
@@ -87,7 +218,7 @@ export function DatabaseView({
             <h2 className="font-display text-xs font-bold">
               Мои продукты <span className="text-faint">({customFoods.length})</span>
             </h2>
-            <span className="ml-auto text-[11px] text-faint">созданы вами, в т. ч. по штрихкоду</span>
+            <span className="ml-auto text-[11px] text-faint">созданы вами, в т. ч. из Open Food Facts</span>
           </header>
           <ul>
             {customs.map((f) => (
@@ -95,13 +226,23 @@ export function DatabaseView({
                 key={f.id}
                 className="group grid grid-cols-[1fr_64px_44px_36px] items-center gap-2 border-b border-linesoft px-4 py-2.5 transition-colors last:border-0 hover:bg-field sm:grid-cols-[1fr_72px_56px_56px_56px_44px_36px]"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 truncate text-sm font-semibold">
-                    {f.name}
-                    {f.barcode && <IBarcode width={12} height={12} className="shrink-0 text-faint" />}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-faint">
-                    {f.barcode && <span className="tabular-nums">#{f.barcode}</span>}
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {f.image ? (
+                    <img src={f.image} alt="" loading="lazy" className="size-9 shrink-0 rounded-lg border border-line object-cover" />
+                  ) : (
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-paper text-faint">
+                      <IApple width={15} height={15} />
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                      {f.name}
+                      {f.barcode && <IBarcode width={12} height={12} className="shrink-0 text-faint" />}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-faint">
+                      {f.brand ? <span className="truncate">{f.brand}</span> : null}
+                      {f.barcode && <span className="tabular-nums">#{f.barcode}</span>}
+                    </div>
                   </div>
                 </div>
                 <span className="text-right font-display text-sm font-bold text-carrot tabular-nums">{f.kcal}</span>
@@ -128,6 +269,7 @@ export function DatabaseView({
         </section>
       )}
 
+      {/* ---- основная база ---- */}
       <div className="card mt-4 overflow-hidden">
         <div className="hidden grid-cols-[1fr_72px_56px_56px_56px_44px] gap-2 border-b border-line bg-field/70 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-faint sm:grid">
           <span>Продукт</span>
@@ -142,8 +284,8 @@ export function DatabaseView({
             <IApple width={34} height={34} className="text-faint" />
             <p className="text-sm font-semibold">Ничего не нашлось</p>
             <p className="max-w-xs text-xs text-faint">
-              Попробуйте изменить запрос или отсканируйте штрихкод упаковки в дневнике — товар
-              найдётся в Open Food Facts и сохранится в «Мои продукты».
+              Попробуйте изменить запрос или найдите товар в Open Food Facts выше — он появится в
+              «Моих продуктах».
             </p>
           </div>
         ) : (
@@ -184,6 +326,61 @@ export function DatabaseView({
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------- карточка товара из Open Food Facts ---------- */
+
+function OffCard({
+  product,
+  index,
+  added,
+  onAdd,
+}: {
+  product: OffProduct;
+  index: number;
+  added: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <div
+      className="fadeup flex items-center gap-3 rounded-xl border border-line bg-field/60 p-3 transition-colors hover:border-teal/50 hover:bg-field"
+      style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+    >
+      {product.imageUrl ? (
+        <img
+          src={product.imageUrl}
+          alt=""
+          loading="lazy"
+          className="size-16 shrink-0 rounded-lg border border-line bg-paper object-cover"
+        />
+      ) : (
+        <span className="grid size-16 shrink-0 place-items-center rounded-lg border border-dashed border-line bg-paper text-faint">
+          <IGlobe width={20} height={20} />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="line-clamp-2 text-sm font-semibold leading-snug">{product.name}</div>
+        {product.brand && <div className="truncate text-[11px] text-faint">{product.brand}</div>}
+        <div className="mt-1 flex items-baseline gap-1.5">
+          <span className="font-display text-base font-extrabold text-carrot tabular-nums">{product.kcal}</span>
+          <span className="text-[11px] text-faint">ккал / 100 г</span>
+        </div>
+        <div className="mt-0.5 text-[10px] text-faint">Источник: Open Food Facts</div>
+      </div>
+      <button
+        onClick={onAdd}
+        disabled={added}
+        aria-label={added ? "Уже добавлен" : `Добавить ${product.name} в базу`}
+        className={`btn-press grid size-9 shrink-0 place-items-center rounded-lg ${
+          added
+            ? "border border-leaf/40 bg-leafwash text-leafdeep"
+            : "bg-teal text-paperink hover:bg-leaf"
+        }`}
+      >
+        {added ? <ICheck width={16} height={16} /> : <IPlus width={17} height={17} />}
+      </button>
     </div>
   );
 }
