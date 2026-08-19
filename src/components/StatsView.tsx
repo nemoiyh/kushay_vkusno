@@ -5,6 +5,7 @@ import type {
   MeasureEntry,
   MeasureKey,
   SleepEntry,
+  WeightEntry,
 } from "../types";
 import {
   MEASURE_KEYS,
@@ -20,7 +21,6 @@ import { MacroBar } from "./ui";
 import {
   IActivity,
   IApple,
-  IClock,
   IDrop,
   IFlame,
   IFoot,
@@ -35,13 +35,21 @@ import {
 type Period = 7 | 14 | 30;
 const PERIODS: Period[] = [7, 14, 30];
 
-const QUALITY: Record<NonNullable<SleepEntry["quality"]>, { label: string; color: string }> = {
-  good: { label: "Хорошо", color: "var(--color-leaf)" },
-  ok: { label: "Нормально", color: "var(--color-amber)" },
-  bad: { label: "Плохо", color: "var(--color-carrot)" },
+const QUALITY: Record<NonNullable<SleepEntry["quality"]>, { label: string; short: string; color: string }> = {
+  good: { label: "Хорошо", short: "Х", color: "var(--color-leaf)" },
+  ok: { label: "Нормально", short: "Н", color: "var(--color-amber)" },
+  bad: { label: "Плохо", short: "П", color: "var(--color-carrot)" },
 };
 
 const num = (s: string) => parseFloat(s.replace(",", "."));
+
+function plural(n: number, one: string, few: string, many: string) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
 
 export function StatsView({
   data,
@@ -66,13 +74,15 @@ export function StatsView({
 
   const dayVals = useMemo(() => keys.map((k) => dayTotals(data.days[k])), [keys, data.days]);
   const logged = dayVals.filter((v) => v.count > 0);
-  const avg = (get: (v: ReturnType<typeof dayTotals>) => number) =>
-    logged.length ? get(logged.reduce((a, v) => ({ ...a, kcal: a.kcal + v.kcal, p: a.p + v.p, f: a.f + v.f, c: a.c + v.c, count: a.count }), { kcal: 0, p: 0, f: 0, c: 0, count: 0 })) / logged.length : 0;
 
-  const avgKcal = Math.round(avg((v) => v.kcal));
-  const avgP = Math.round(avg((v) => v.p));
-  const avgF = Math.round(avg((v) => v.f));
-  const avgC = Math.round(avg((v) => v.c));
+  const sum = logged.reduce(
+    (a, v) => ({ kcal: a.kcal + v.kcal, p: a.p + v.p, f: a.f + v.f, c: a.c + v.c }),
+    { kcal: 0, p: 0, f: 0, c: 0 },
+  );
+  const avgKcal = logged.length ? Math.round(sum.kcal / logged.length) : 0;
+  const avgP = logged.length ? Math.round(sum.p / logged.length) : 0;
+  const avgF = logged.length ? Math.round(sum.f / logged.length) : 0;
+  const avgC = logged.length ? Math.round(sum.c / logged.length) : 0;
   const onGoal = logged.filter((v) => v.kcal <= data.goals.kcal).length;
   const streak = streakDays(data.days, data.goals.kcal);
 
@@ -87,7 +97,6 @@ export function StatsView({
     () => [...data.weights].sort((a, b) => a.date.localeCompare(b.date)),
     [data.weights],
   );
-  const wDelta = weights.length >= 2 ? weights[weights.length - 1].value - weights[0].value : null;
 
   const todaySleep = data.sleep.find((s) => s.date === today);
   const todayAct = data.activity.find((a) => a.date === today);
@@ -116,327 +125,208 @@ export function StatsView({
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-12">
-        {/* ВЕС */}
-        <Card
-          className="lg:col-span-8"
-          icon={<IScale width={16} height={16} />}
-          tint="bg-leafwash text-leafdeep"
-          title="Вес"
-          right={
-            weights.length ? (
-              <div className="flex items-center gap-2">
-                <span className="font-display text-lg font-extrabold tabular-nums">
-                  {ru1(weights[weights.length - 1].value)} кг
-                </span>
-                {wDelta !== null && (
-                  <span
-                    className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${
-                      wDelta <= 0 ? "bg-leafwash text-leafdeep" : "bg-carrotwash text-carrot"
-                    }`}
-                  >
-                    {wDelta <= 0 ? <ITrendDown width={12} height={12} /> : <ITrendUp width={12} height={12} />}
-                    {wDelta > 0 ? "+" : ""}{ru1(wDelta)} кг
-                  </span>
-                )}
-              </div>
-            ) : null
-          }
-        >
-          {weights.length >= 2 ? (
-            <>
-              <WeightSpark values={weights.map((w) => w.value)} />
-              <p className="mt-1.5 text-[11px] text-faint tabular-nums">
-                {weights.length} замеров · динамика за всё время
-              </p>
-            </>
-          ) : (
-            <p className="mt-3 rounded-xl bg-paper px-3 py-3 text-xs text-faint">
-              Замеров пока нет. Добавьте вес в «Настройках» — здесь появится график.
-            </p>
-          )}
-        </Card>
-
-        {/* ЗАМЕРЫ ТЕЛА */}
-        <MeasuresCard
-          measures={data.measures}
-          onSave={onMeasures}
-        />
-
-        {/* КАЛОРИИ */}
-        <Card
-          className="lg:col-span-8"
-          icon={<IFlame width={16} height={16} />}
-          tint="bg-carrotwash text-carrot"
-          title="Калории по дням"
-          right={
-            <div className="text-right">
-              <span className="text-[11px] text-faint">среднее </span>
-              <span className="font-display text-lg font-extrabold text-carrot tabular-nums">{fmt(avgKcal)}</span>
-              <span className="ml-2 rounded-full bg-paper px-2 py-0.5 text-[10px] font-bold text-faint">
-                в цели {onGoal} из {logged.length} · серия {streak}
-              </span>
+      <div className="mt-5 flex flex-col gap-5">
+        {/* РЯД 1 · Вес + Замеры тела */}
+        <section className="card p-5 sm:p-6">
+          <div className="grid gap-6 lg:grid-cols-[1.25fr_1fr] lg:gap-0">
+            <WeightZone weights={weights} />
+            <div className="border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+              <MeasuresZone measures={data.measures} onSave={onMeasures} />
             </div>
-          }
-        >
-          <CaloriesChart keys={keys} vals={dayVals} goal={data.goals.kcal} showWeekdays={period === 7} />
-          {logged.length === 0 && (
-            <p className="mt-2 rounded-xl bg-paper px-3 py-2.5 text-center text-xs text-faint">
-              За период нет записей в дневнике.
-            </p>
-          )}
-        </Card>
-
-        {/* БЖУ */}
-        <Card
-          className="lg:col-span-4"
-          icon={<IApple width={16} height={16} />}
-          tint="bg-tealwash text-teal"
-          title="БЖУ · среднее в день"
-          right={<span className="text-[11px] text-faint">за {period} дней</span>}
-        >
-          <div className="mt-4 space-y-3">
-            <MacroBar label={`Белки · ${avgP} г`} value={avgP} goal={data.goals.p} color="var(--color-leaf)" wash="var(--color-leafwash)" />
-            <MacroBar label={`Жиры · ${avgF} г`} value={avgF} goal={data.goals.f} color="var(--color-amber)" wash="var(--color-amberwash)" />
-            <MacroBar label={`Углеводы · ${avgC} г`} value={avgC} goal={data.goals.c} color="var(--color-teal)" wash="var(--color-tealwash)" />
           </div>
-          <div className="mt-4 flex h-3 overflow-hidden rounded-full">
-            {(() => {
-              const tot = avgP * 4 + avgF * 9 + avgC * 4 || 1;
-              return (
-                <>
-                  <div style={{ width: `${(avgP * 4 / tot) * 100}%`, background: "var(--color-leaf)" }} title="Белки" />
-                  <div style={{ width: `${(avgF * 9 / tot) * 100}%`, background: "var(--color-amber)" }} title="Жиры" />
-                  <div style={{ width: `${(avgC * 4 / tot) * 100}%`, background: "var(--color-teal)" }} title="Углеводы" />
-                </>
-              );
-            })()}
-          </div>
-          <p className="mt-1.5 text-[11px] text-faint">соотношение калорий из белков, жиров и углеводов</p>
-        </Card>
+        </section>
 
-        {/* АКТИВНОСТЬ */}
-        <ActivityCard
-          className="lg:col-span-3 md:col-span-1"
-          vals={actVals}
-          today={todayAct}
-          onSave={onActivity}
-        />
-
-        {/* ШАГИ */}
-        <StepsCard
-          className="lg:col-span-3 md:col-span-1"
-          vals={stepsVals}
-          avg={Math.round(avgOf(stepsVals))}
-          today={todaySteps?.value}
-          onSave={onSteps}
-        />
-
-        {/* СОН */}
-        <SleepCard
-          className="lg:col-span-3 md:col-span-1"
-          vals={sleepVals}
-          avg={avgOf(sleepVals)}
-          today={todaySleep}
-          onSave={onSleep}
-        />
-
-        {/* ВОДА */}
-        <Card
-          className="lg:col-span-3 md:col-span-1"
-          icon={<IDrop width={16} height={16} />}
-          tint="bg-waterwash text-water"
-          title="Вода"
-          right={
-            <div className="text-right">
-              <span className="text-[11px] text-faint">среднее </span>
-              <span className="font-display text-lg font-extrabold text-water tabular-nums">{fmt(Math.round(avgOf(waterVals)))}</span>
-              <span className="text-[11px] text-faint"> мл</span>
+        {/* РЯД 2 · Калории + БЖУ */}
+        <section className="card p-5 sm:p-6">
+          <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:gap-0">
+            <CaloriesZone
+              keys={keys}
+              vals={dayVals}
+              goal={data.goals.kcal}
+              avgKcal={avgKcal}
+              onGoal={onGoal}
+              loggedCount={logged.length}
+              streak={streak}
+              showWeekdays={period === 7}
+            />
+            <div className="border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+              <MacrosZone
+                avgP={avgP}
+                avgF={avgF}
+                avgC={avgC}
+                goals={data.goals}
+                period={period}
+              />
             </div>
-          }
-        >
-          <Bars values={waterVals} color="var(--color-water)" refLine={2000} unit=" мл" />
-          <p className="mt-1.5 text-[11px] text-faint">пунктир — 2000 мл · отметки в дневнике</p>
-        </Card>
+          </div>
+        </section>
+
+        {/* РЯД 3 · Активность+Шаги / Сон / Вода */}
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
+          <section className="card p-5 md:col-span-2 lg:col-span-6 sm:p-6">
+            <div className="grid grid-cols-1 gap-6 min-[430px]:grid-cols-2 min-[430px]:gap-0">
+              <ActivityZone
+                vals={actVals}
+                today={todayAct}
+                onSave={onActivity}
+                className="min-[430px]:pr-6"
+              />
+              <StepsZone
+                vals={stepsVals}
+                avg={Math.round(avgOf(stepsVals))}
+                today={todaySteps?.value}
+                onSave={onSteps}
+                className="border-t border-dashed border-line pt-5 min-[430px]:border-l min-[430px]:border-t-0 min-[430px]:pl-6 min-[430px]:pt-0"
+              />
+            </div>
+          </section>
+
+          <SleepZone
+            className="md:col-span-1 lg:col-span-3"
+            vals={sleepVals}
+            avg={avgOf(sleepVals)}
+            today={todaySleep}
+            onSave={onSleep}
+          />
+
+          <WaterZone
+            className="md:col-span-1 lg:col-span-3"
+            vals={waterVals}
+            avg={avgOf(waterVals)}
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---------- каркас карточки ---------- */
+/* ---------- заголовок зоны ---------- */
 
-function Card({
-  className,
+function ZoneTitle({
   icon,
   tint,
   title,
   right,
-  children,
 }: {
-  className?: string;
   icon: ReactNode;
   tint: string;
   title: string;
   right?: ReactNode;
-  children: ReactNode;
 }) {
   return (
-    <section className={`card p-5 ${className ?? ""}`}>
-      <div className="flex items-center gap-2.5">
-        <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${tint}`}>{icon}</span>
-        <h2 className="font-display text-[13px] font-bold">{title}</h2>
-        <div className="ml-auto min-w-0 text-right">{right}</div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/* ---------- мини-столбики ---------- */
-
-function Bars({
-  values,
-  color,
-  refLine,
-  unit,
-  height = 88,
-}: {
-  values: number[];
-  color: string;
-  refLine?: number;
-  unit?: string;
-  height?: number;
-}) {
-  const max = Math.max(...values, refLine ?? 0, 1) * 1.12;
-  return (
-    <div className="relative mt-3" style={{ height }}>
-      {refLine !== undefined && (
-        <div
-          className="pointer-events-none absolute inset-x-0 border-t border-dashed border-line"
-          style={{ bottom: `${(refLine / max) * 100}%` }}
-        />
-      )}
-      <div className="relative flex h-full items-end gap-[3px]">
-        {values.map((v, i) => (
-          <div key={i} className="group relative flex h-full flex-1 items-end">
-            <div
-              className="w-full rounded-t-[3px] transition-all duration-200 group-hover:opacity-75"
-              style={{
-                height: `${Math.max(v > 0 ? 5 : 2.5, (v / max) * 100)}%`,
-                background: v > 0 ? color : "var(--color-linesoft)",
-              }}
-            />
-            <span className="pointer-events-none absolute -top-6 left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-paperink group-hover:block">
-              {fmt(Math.round(v))}{unit ?? ""}
-            </span>
-          </div>
-        ))}
-      </div>
+    <div className="flex items-center gap-2.5">
+      <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${tint}`}>{icon}</span>
+      <h2 className="font-display text-[13px] font-bold">{title}</h2>
+      <div className="ml-auto min-w-0 text-right">{right}</div>
     </div>
   );
 }
 
-/* ---------- график калорий ---------- */
+/* ---------- РЯД 1: вес ---------- */
 
-function CaloriesChart({
-  keys,
-  vals,
-  goal,
-  showWeekdays,
-}: {
-  keys: string[];
-  vals: ReturnType<typeof dayTotals>[];
-  goal: number;
-  showWeekdays: boolean;
-}) {
-  const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(goal * 1.25, ...vals.map((v) => v.kcal), 1);
-  const goalPct = (goal / max) * 100;
-  const today = todayKey();
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+function WeightZone({ weights }: { weights: WeightEntry[] }) {
+  const last = weights[weights.length - 1];
+  const prev = weights[weights.length - 2];
+  const delta = last && prev ? Math.round((last.value - prev.value) * 10) / 10 : null;
+
+  const min = weights.length ? Math.min(...weights.map((w) => w.value)) : 0;
+  const max = weights.length ? Math.max(...weights.map((w) => w.value)) : 1;
+  const span = max - min || 1;
+  const PAD = 14;
+  const yPct = (v: number) => PAD + (1 - (v - min) / span) * (100 - PAD * 2);
+  const pts = weights.map((w, i) => ({
+    x: weights.length > 1 ? (i / (weights.length - 1)) * 100 : 50,
+    y: yPct(w.value),
+  }));
+  const line = smoothPath(pts);
+  const area = weights.length > 1 ? `${line} L 100 100 L 0 100 Z` : "";
 
   return (
-    <div className="relative mt-5 h-48">
-      <div
-        className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-carrot/60"
-        style={{ bottom: `${goalPct}%` }}
-      >
-        <span className="absolute right-0 -top-5 rounded-md bg-carrotwash px-1.5 py-0.5 text-[10px] font-bold text-carrot">
-          цель {fmt(goal)}
-        </span>
-      </div>
-      <div className="relative z-10 flex h-full items-end gap-[3px] sm:gap-1.5">
-        {vals.map((v, i) => {
-          const h = Math.max(v.kcal > 0 ? 4 : 2, (v.kcal / max) * 100);
-          const over = v.kcal > goal;
-          const empty = v.count === 0;
-          return (
-            <div
-              key={keys[i]}
-              className="flex h-full flex-1 cursor-pointer flex-col items-center justify-end gap-1"
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-            >
-              <div
-                className="bar-grow w-full rounded-t-md"
-                style={{
-                  height: `${h}%`,
-                  animationDelay: `${i * 24}ms`,
-                  background: empty ? "var(--color-linesoft)" : over ? "var(--color-carrot)" : "var(--color-leaf)",
-                  opacity: hover === null || hover === i ? 1 : 0.5,
-                }}
-              />
-              {showWeekdays && (
-                <span className={`text-[10px] font-semibold ${keys[i] === today ? "text-carrot" : "text-faint"}`}>
-                  {WD[new Date(keys[i] + "T12:00:00").getDay()]}
+    <div>
+      <ZoneTitle
+        icon={<IScale width={16} height={16} />}
+        tint="bg-leafwash text-leafdeep"
+        title="Вес"
+        right={
+          last && (
+            <div className="flex items-center gap-2">
+              <span className="font-display text-xl font-extrabold leading-none tabular-nums">
+                {ru1(last.value)} <span className="text-xs font-bold text-faint">кг</span>
+              </span>
+              {delta !== null && (
+                <span
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${
+                    delta <= 0 ? "bg-leafwash text-leafdeep" : "bg-carrotwash text-carrot"
+                  }`}
+                >
+                  {delta <= 0 ? <ITrendDown width={12} height={12} /> : <ITrendUp width={12} height={12} />}
+                  {delta > 0 ? "+" : ""}{ru1(delta)} кг
                 </span>
               )}
             </div>
-          );
-        })}
-      </div>
-      {hover !== null && vals[hover].count > 0 && (
-        <div className="pointer-events-none absolute -top-2 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-ink px-3 py-1.5 text-center text-[11px] font-semibold text-paperink hard-sm">
-          {fmt(vals[hover].kcal)} ккал
-          <span className="block font-normal opacity-75">
-            Б {Math.round(vals[hover].p)} · Ж {Math.round(vals[hover].f)} · У {Math.round(vals[hover].c)}
-          </span>
-        </div>
+          )
+        }
+      />
+
+      {weights.length === 0 ? (
+        <p className="mt-4 rounded-xl bg-paper px-3 py-4 text-center text-xs text-faint">
+          Замеров пока нет — добавьте вес в «Настройках»
+        </p>
+      ) : (
+        <>
+          <div className="relative mt-4 h-20">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
+              {area && <path d={area} fill="rgba(15,125,138,0.12)" />}
+              {weights.length > 1 && (
+                <path
+                  d={line}
+                  fill="none"
+                  stroke="var(--color-leaf)"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+            </svg>
+            {pts.map((p, i) => (
+              <span
+                key={i}
+                className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-leaf bg-card"
+                style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                title={`${ru1(weights[i].value)} кг`}
+              />
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-faint tabular-nums">
+            {weights.length} {plural(weights.length, "замер", "замера", "замеров")} · динамика за всё время
+          </p>
+        </>
       )}
     </div>
   );
 }
 
-/* ---------- спарклайн веса ---------- */
+/* ---------- РЯД 1: замеры тела ---------- */
 
-function WeightSpark({ values }: { values: number[] }) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const y = (v: number) => 34 - ((v - min) / span) * 28;
-  const pts = values.map((v, i) => `${(i / (values.length - 1)) * 100},${y(v)}`).join(" ");
-  const area = `0,40 ${pts} 100,40`;
-  return (
-    <svg viewBox="0 0 100 40" className="mt-4 h-24 w-full" preserveAspectRatio="none" aria-hidden>
-      <polygon points={area} fill="rgba(15,125,138,0.12)" />
-      <polyline points={pts} fill="none" stroke="var(--color-leaf)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {values.map((v, i) => (
-        <circle
-          key={i}
-          cx={(i / (values.length - 1)) * 100}
-          cy={y(v)}
-          r="2.4"
-          fill="var(--color-card)"
-          stroke="var(--color-leaf)"
-          strokeWidth="2"
-        />
-      ))}
-    </svg>
-  );
-}
-
-/* ---------- замеры тела ---------- */
-
-function MeasuresCard({
+function MeasuresZone({
   measures,
   onSave,
 }: {
@@ -476,23 +366,31 @@ function MeasuresCard({
     const delta = last && prev ? Math.round((last.value - prev.value) * 10) / 10 : null;
     return { id, label, last, delta };
   });
-  const hasAny = rows.some((r) => r.last);
 
   return (
-    <Card
-      className="lg:col-span-4"
-      icon={<IRuler width={16} height={16} />}
-      tint="bg-amberwash text-amber"
-      title="Замеры тела"
-      right={
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="btn-press flex items-center gap-1 rounded-lg border border-leaf/40 bg-leafwash px-2.5 py-1 text-[11px] font-bold text-leafdeep"
-        >
-          <IPlus width={12} height={12} /> замер
-        </button>
-      }
-    >
+    <div>
+      <ZoneTitle
+        icon={<IRuler width={16} height={16} />}
+        tint="bg-amberwash text-amber"
+        title="Замеры тела"
+        right={
+          <button
+            onClick={() => setOpen((o) => !o)}
+            aria-label="Добавить замер"
+            title="Добавить замер"
+            className={`btn-press grid size-8 place-items-center rounded-full text-paperink ${
+              open ? "bg-ink" : "bg-leaf"
+            }`}
+          >
+            {open ? (
+              <span className="font-display text-base leading-none">×</span>
+            ) : (
+              <IPlus width={15} height={15} />
+            )}
+          </button>
+        }
+      />
+
       {open && (
         <div className="anim-in mt-3 rounded-xl border border-line bg-field/70 p-3">
           <div className="grid grid-cols-2 gap-2">
@@ -519,47 +417,198 @@ function MeasuresCard({
         </div>
       )}
 
-      {!hasAny && !open ? (
-        <p className="mt-3 rounded-xl bg-paper px-3 py-3 text-xs text-faint">
-          Замеров пока нет. Добавьте первый — покажем динамику по каждому параметру.
-        </p>
-      ) : (
-        <ul className="mt-3 space-y-1">
-          {rows.map(({ id, label, last, delta }) => (
-            <li
-              key={id}
-              className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-field"
-            >
-              <span className="text-soft">{label}</span>
-              <span className="flex items-center gap-2 tabular-nums">
-                {last ? (
-                  <>
-                    {delta !== null && delta !== 0 && (
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                          delta < 0 ? "bg-leafwash text-leafdeep" : "bg-carrotwash text-carrot"
-                        }`}
-                      >
-                        {delta > 0 ? "+" : ""}{ru1(delta)}
-                      </span>
-                    )}
-                    <b>{ru1(last.value)} см</b>
-                  </>
-                ) : (
-                  <span className="text-[11px] text-faint">—</span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
+      <ul className="mt-3">
+        {rows.map(({ id, label, last, delta }) => (
+          <li
+            key={id}
+            className="flex items-center justify-between gap-3 border-b border-dashed border-linesoft py-[7px] text-sm last:border-0"
+          >
+            <span className="text-soft">{label}</span>
+            <span className="flex items-center gap-2 tabular-nums">
+              {last ? (
+                <>
+                  {delta !== null && delta !== 0 && (
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                        delta < 0 ? "bg-leafwash text-leafdeep" : "bg-carrotwash text-carrot"
+                      }`}
+                    >
+                      {delta > 0 ? "+" : ""}{ru1(delta)}
+                    </span>
+                  )}
+                  <b className="font-display text-[13px]">{ru1(last.value)} см</b>
+                </>
+              ) : (
+                <span className="text-faint">—</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
-/* ---------- активность ---------- */
+/* ---------- РЯД 2: калории ---------- */
 
-function ActivityCard({
+function CaloriesZone({
+  keys,
+  vals,
+  goal,
+  avgKcal,
+  onGoal,
+  loggedCount,
+  streak,
+  showWeekdays,
+}: {
+  keys: string[];
+  vals: ReturnType<typeof dayTotals>[];
+  goal: number;
+  avgKcal: number;
+  onGoal: number;
+  loggedCount: number;
+  streak: number;
+  showWeekdays: boolean;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = Math.max(goal * 1.25, ...vals.map((v) => v.kcal), 1);
+  const goalPct = (goal / max) * 100;
+  const today = todayKey();
+
+  return (
+    <div>
+      <ZoneTitle
+        icon={<IFlame width={16} height={16} />}
+        tint="bg-carrotwash text-carrot"
+        title="Калории по дням"
+        right={
+          <div className="flex items-center gap-2">
+            <span className="text-right">
+              <span className="text-[10px] uppercase tracking-wide text-faint">среднее </span>
+              <span className="font-display text-xl font-extrabold leading-none text-carrot tabular-nums">
+                {fmt(avgKcal)}
+              </span>
+            </span>
+            <span className="rounded-full bg-paper px-2 py-1 text-[10px] font-bold text-faint tabular-nums">
+              цель {fmt(goal)}
+            </span>
+          </div>
+        }
+      />
+
+      <div className="relative mt-5 h-44">
+        <div
+          className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-carrot/60"
+          style={{ bottom: `${goalPct}%` }}
+        />
+        <div className="relative z-10 flex h-full items-end gap-[3px] sm:gap-1.5">
+          {vals.map((v, i) => {
+            const h = Math.max(v.kcal > 0 ? 4 : 2, (v.kcal / max) * 100);
+            const over = v.kcal > goal;
+            const empty = v.count === 0;
+            return (
+              <div
+                key={keys[i]}
+                className="flex h-full flex-1 cursor-pointer flex-col items-center justify-end gap-1"
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+              >
+                <div
+                  className="bar-grow w-full rounded-t-md"
+                  style={{
+                    height: `${h}%`,
+                    animationDelay: `${i * 24}ms`,
+                    background: empty ? "var(--color-linesoft)" : over ? "var(--color-carrot)" : "var(--color-leaf)",
+                    opacity: hover === null || hover === i ? 1 : 0.5,
+                  }}
+                />
+                {showWeekdays && (
+                  <span className={`text-[10px] font-semibold ${keys[i] === today ? "text-carrot" : "text-faint"}`}>
+                    {WD[new Date(keys[i] + "T12:00:00").getDay()]}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {hover !== null && vals[hover].count > 0 && (
+          <div className="pointer-events-none absolute -top-2 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-ink px-3 py-1.5 text-center text-[11px] font-semibold text-paperink hard-sm">
+            {fmt(vals[hover].kcal)} ккал
+            <span className="block font-normal opacity-75">
+              Б {Math.round(vals[hover].p)} · Ж {Math.round(vals[hover].f)} · У {Math.round(vals[hover].c)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-faint">
+        <span>пунктир — дневная цель</span>
+        {loggedCount > 0 && (
+          <span className="tabular-nums">
+            в цели <b className="text-leafdeep">{onGoal}</b> из {loggedCount} дней · серия{" "}
+            <b className="text-carrot">{streak}</b>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- РЯД 2: БЖУ ---------- */
+
+function MacrosZone({
+  avgP,
+  avgF,
+  avgC,
+  goals,
+  period,
+}: {
+  avgP: number;
+  avgF: number;
+  avgC: number;
+  goals: AppData["goals"];
+  period: number;
+}) {
+  const pKcal = avgP * 4;
+  const fKcal = avgF * 9;
+  const cKcal = avgC * 4;
+  const tot = pKcal + fKcal + cKcal || 1;
+
+  return (
+    <div className="flex h-full flex-col">
+      <ZoneTitle
+        icon={<IApple width={16} height={16} />}
+        tint="bg-tealwash text-teal"
+        title="БЖУ · среднее в день"
+        right={<span className="text-[11px] text-faint">за {period} дней</span>}
+      />
+
+      <div className="mt-4 space-y-3">
+        <MacroBar label="Белки" value={avgP} goal={goals.p} color="var(--color-leaf)" wash="var(--color-leafwash)" />
+        <MacroBar label="Жиры" value={avgF} goal={goals.f} color="var(--color-amber)" wash="var(--color-amberwash)" />
+        <MacroBar label="Углеводы" value={avgC} goal={goals.c} color="var(--color-teal)" wash="var(--color-tealwash)" />
+      </div>
+
+      <div className="mt-auto pt-4">
+        <div className="flex h-3 overflow-hidden rounded-full">
+          <div style={{ width: `${(pKcal / tot) * 100}%`, background: "var(--color-leaf)" }} />
+          <div style={{ width: `${(fKcal / tot) * 100}%`, background: "var(--color-amber)" }} />
+          <div style={{ width: `${(cKcal / tot) * 100}%`, background: "var(--color-teal)" }} />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-semibold text-soft">
+          <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-leaf" /> белки {Math.round((pKcal / tot) * 100)}%</span>
+          <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-amber" /> жиры {Math.round((fKcal / tot) * 100)}%</span>
+          <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-teal" /> углеводы {Math.round((cKcal / tot) * 100)}%</span>
+        </div>
+        <p className="mt-1.5 text-[11px] text-faint">соотношение калорий из макронутриентов</p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- РЯД 3: активность ---------- */
+
+function ActivityZone({
   className,
   vals,
   today,
@@ -590,46 +639,56 @@ function ActivityCard({
   };
 
   return (
-    <Card
-      className={className}
-      icon={<IActivity width={16} height={16} />}
-      tint="bg-carrotwash text-carrot"
-      title="Активность"
-      right={<span className="text-[11px] text-faint">{count} трен.</span>}
-    >
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-xl bg-paper px-3 py-2.5">
-          <div className="flex items-center gap-1.5 font-display text-lg font-extrabold tabular-nums">
-            <IClock width={14} height={14} className="text-faint" />
-            {fmt(minutes)}
-          </div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">минут</div>
-        </div>
-        <div className="rounded-xl bg-paper px-3 py-2.5">
-          <div className="flex items-center gap-1.5 font-display text-lg font-extrabold tabular-nums">
-            <IFlame width={14} height={14} className="text-carrot" />
-            {fmt(kcalSum)}
-          </div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">акт. ккал</div>
-        </div>
+    <div className={className}>
+      <ZoneTitle
+        icon={<IActivity width={16} height={16} />}
+        tint="bg-carrotwash text-carrot"
+        title="Активность"
+      />
+      <div className="mt-3">
+        <span className="font-display text-3xl font-extrabold leading-none tabular-nums">{count}</span>
+        <span className="ml-1.5 text-xs font-semibold text-faint">
+          {plural(count, "тренировка", "тренировки", "тренировок")}
+        </span>
       </div>
-      <Bars values={vals.map((v) => v?.kcal ?? 0)} color="var(--color-carrot)" unit=" ккал" height={56} />
-      <div className="mt-2.5 flex gap-1.5">
-        <input className="field h-9 w-0 flex-1 py-0 text-sm tabular-nums" placeholder="мин" inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} />
-        <input className="field h-9 w-0 flex-1 py-0 text-sm tabular-nums" placeholder="ккал" inputMode="numeric" value={kcal} onChange={(e) => setKcal(e.target.value)} />
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-soft tabular-nums">
+        <span>{fmt(minutes)} мин</span>
+        <span className="text-line">·</span>
+        <span className="text-carrot">{fmt(kcalSum)} ккал</span>
+      </div>
+
+      <div className="mt-3 flex gap-1.5">
+        <input
+          className="field h-9 w-0 flex-1 py-0 text-sm tabular-nums"
+          placeholder="мин"
+          inputMode="numeric"
+          value={min}
+          onChange={(e) => setMin(e.target.value)}
+        />
+        <input
+          className="field h-9 w-0 flex-1 py-0 text-sm tabular-nums"
+          placeholder="ккал"
+          inputMode="numeric"
+          value={kcal}
+          onChange={(e) => setKcal(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+        />
         <button onClick={save} className="btn-press shrink-0 rounded-xl bg-ink px-3 text-xs font-bold text-paperink">
           ОК
         </button>
       </div>
-      {err && <p className="mt-1 text-[11px] font-medium text-danger">{err}</p>}
-      <p className="mt-1.5 text-[11px] text-faint">тренировка за сегодня</p>
-    </Card>
+      {err ? (
+        <p className="mt-1 text-[11px] font-medium text-danger">{err}</p>
+      ) : (
+        <p className="mt-1.5 text-[11px] text-faint">записать тренировку за сегодня</p>
+      )}
+    </div>
   );
 }
 
-/* ---------- шаги ---------- */
+/* ---------- РЯД 3: шаги ---------- */
 
-function StepsCard({
+function StepsZone({
   className,
   vals,
   avg,
@@ -657,21 +716,17 @@ function StepsCard({
   };
 
   return (
-    <Card
-      className={className}
-      icon={<IFoot width={16} height={16} />}
-      tint="bg-leafwash text-leafdeep"
-      title="Шаги"
-      right={
-        <div className="text-right">
-          <span className="text-[11px] text-faint">среднее </span>
-          <span className="font-display text-lg font-extrabold tabular-nums">{fmt(avg)}</span>
-        </div>
-      }
-    >
-      <Bars values={vals} color="var(--color-leaf)" refLine={10000} height={88} />
-      <p className="mt-1.5 text-[11px] text-faint">пунктир — 10 000 · рекорд {fmt(best)}</p>
-      <div className="mt-2.5 flex gap-1.5">
+    <div className={className}>
+      <ZoneTitle icon={<IFoot width={16} height={16} />} tint="bg-leafwash text-leafdeep" title="Шаги" />
+      <div className="mt-3">
+        <span className="font-display text-3xl font-extrabold leading-none tabular-nums">{fmt(avg)}</span>
+        <span className="ml-1.5 text-xs font-semibold text-faint">в день</span>
+      </div>
+      <p className="mt-2 text-xs font-semibold text-soft tabular-nums">
+        рекорд: <span className="text-leafdeep">{fmt(best)}</span>
+      </p>
+
+      <div className="mt-3 flex gap-1.5">
         <input
           className="field h-9 flex-1 py-0 text-sm tabular-nums"
           placeholder="шагов сегодня"
@@ -684,14 +739,56 @@ function StepsCard({
           ОК
         </button>
       </div>
-      {err && <p className="mt-1 text-[11px] font-medium text-danger">{err}</p>}
-    </Card>
+      {err ? (
+        <p className="mt-1 text-[11px] font-medium text-danger">{err}</p>
+      ) : (
+        <p className="mt-1.5 text-[11px] text-faint">записать шаги за сегодня</p>
+      )}
+    </div>
   );
 }
 
-/* ---------- сон ---------- */
+/* ---------- мини-столбики ---------- */
 
-function SleepCard({
+function Bars({
+  values,
+  color,
+  refLine,
+  height = 64,
+}: {
+  values: number[];
+  color: string;
+  refLine?: number;
+  height?: number;
+}) {
+  const max = Math.max(...values, refLine ?? 0, 1) * 1.12;
+  return (
+    <div className="relative mt-3" style={{ height }}>
+      {refLine !== undefined && (
+        <div
+          className="pointer-events-none absolute inset-x-0 border-t border-dashed border-line"
+          style={{ bottom: `${(refLine / max) * 100}%` }}
+        />
+      )}
+      <div className="relative flex h-full items-end gap-[3px]">
+        {values.map((v, i) => (
+          <div
+            key={i}
+            className="w-full flex-1 rounded-t-[3px] transition-all duration-200 hover:opacity-70"
+            style={{
+              height: `${Math.max(v > 0 ? 5 : 2.5, (v / max) * 100)}%`,
+              background: v > 0 ? color : "var(--color-linesoft)",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- РЯД 3: сон ---------- */
+
+function SleepZone({
   className,
   vals,
   avg,
@@ -721,47 +818,48 @@ function SleepCard({
   };
 
   return (
-    <Card
-      className={className}
-      icon={<IMoon width={16} height={16} />}
-      tint="bg-tealwash text-teal"
-      title="Сон"
-      right={
-        <div className="text-right">
-          <span className="text-[11px] text-faint">среднее </span>
-          <span className="font-display text-lg font-extrabold tabular-nums">{ru1(avg)}</span>
-          <span className="text-[11px] text-faint"> ч</span>
-        </div>
-      }
-    >
-      <Bars values={vals} color="var(--color-teal)" refLine={8} unit=" ч" height={88} />
-      <p className="mt-1.5 flex items-center justify-between text-[11px] text-faint">
-        <span>пунктир — 8 ч</span>
-        {latest?.quality && (
-          <span className="flex items-center gap-1 font-semibold" style={{ color: QUALITY[latest.quality].color }}>
-            <span className="size-1.5 rounded-full" style={{ background: QUALITY[latest.quality].color }} />
+    <section className={`card flex flex-col p-5 ${className ?? ""}`}>
+      <ZoneTitle icon={<IMoon width={16} height={16} />} tint="bg-tealwash text-teal" title="Сон" />
+      <div className="mt-3">
+        <span className="font-display text-3xl font-extrabold leading-none tabular-nums">{ru1(avg)}</span>
+        <span className="ml-1.5 text-xs font-semibold text-faint">ч в среднем</span>
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-[11px] font-semibold">
+        {latest?.quality ? (
+          <span className="flex items-center gap-1.5" style={{ color: QUALITY[latest.quality].color }}>
+            <span className="size-2 rounded-full" style={{ background: QUALITY[latest.quality].color }} />
             прошлая ночь: {QUALITY[latest.quality].label.toLowerCase()}
           </span>
+        ) : (
+          <span className="text-faint">качество пока не отмечено</span>
         )}
-      </p>
-      <div className="mt-2.5 flex gap-1.5">
+      </div>
+
+      <div className="flex-1">
+        <Bars values={vals} color="var(--color-teal)" refLine={8} height={64} />
+        <p className="mt-1.5 text-[11px] text-faint">пунктир — цель 8 ч</p>
+      </div>
+
+      <div className="mt-3 flex gap-1.5">
         <input
-          className="field h-9 w-20 py-0 text-sm tabular-nums"
-          placeholder="часов"
+          className="field h-9 w-16 shrink-0 py-0 text-sm tabular-nums"
+          placeholder="ч"
           inputMode="decimal"
           value={hours}
           onChange={(e) => setHours(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
         />
-        <div className="flex flex-1 rounded-xl border border-line bg-field p-0.5">
+        <div className="flex min-w-0 flex-1 rounded-xl border border-line bg-field p-0.5">
           {(["bad", "ok", "good"] as const).map((q) => (
             <button
               key={q}
               onClick={() => setQuality(q)}
-              className={`flex-1 rounded-lg text-[10px] font-bold transition-colors ${
+              title={QUALITY[q].label}
+              className={`flex-1 rounded-lg text-[11px] font-bold transition-colors ${
                 quality === q ? "bg-ink text-paperink" : "text-faint hover:text-soft"
               }`}
             >
-              {QUALITY[q].label}
+              {QUALITY[q].short}
             </button>
           ))}
         </div>
@@ -770,6 +868,26 @@ function SleepCard({
         </button>
       </div>
       {err && <p className="mt-1 text-[11px] font-medium text-danger">{err}</p>}
-    </Card>
+    </section>
+  );
+}
+
+/* ---------- РЯД 3: вода ---------- */
+
+function WaterZone({ className, vals, avg }: { className?: string; vals: number[]; avg: number }) {
+  return (
+    <section className={`card flex flex-col p-5 ${className ?? ""}`}>
+      <ZoneTitle icon={<IDrop width={16} height={16} />} tint="bg-waterwash text-water" title="Вода" />
+      <div className="mt-3">
+        <span className="font-display text-3xl font-extrabold leading-none tabular-nums">{fmt(Math.round(avg))}</span>
+        <span className="ml-1.5 text-xs font-semibold text-faint">мл в среднем</span>
+      </div>
+      <p className="mt-2 text-[11px] font-semibold text-faint">стаканы отмечаются в дневнике</p>
+
+      <div className="flex-1">
+        <Bars values={vals} color="var(--color-water)" refLine={2000} height={64} />
+        <p className="mt-1.5 text-[11px] text-faint">пунктир — цель 2000 мл</p>
+      </div>
+    </section>
   );
 }

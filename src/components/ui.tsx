@@ -129,12 +129,13 @@ export function MacroBar({
 }) {
   const frac = goal > 0 ? Math.min(1, value / goal) : 0;
   const over = goal > 0 && value > goal;
+  const pct = goal > 0 ? Math.round((value / goal) * 100) : 0;
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[13px] font-semibold" style={{ color }}>{label}</span>
         <span className="text-xs text-soft tabular-nums">
-          <b className="text-ink">{Math.round(value)}</b> / {goal} г
+          <b className="text-ink">{Math.round(value)}</b> / {goal} г · {pct}%
         </span>
       </div>
       <div className="mt-1 h-2.5 rounded-full overflow-hidden" style={{ background: wash }}>
