@@ -1,4 +1,5 @@
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { ToastItem } from "../types";
 import { IAlert, ICheck, IInfo, IX } from "./Icons";
 
@@ -174,8 +175,17 @@ export function Modal({
     };
   }, [onClose]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
+  /*
+   * Рендерим через Portal прямо в <body>: это гарантирует, что position: fixed
+   * считается от окна браузера, а не от ближайшего предка с transform/filter
+   * (которые создают новый контекст наложения и «ломают» фиксированное позиционирование).
+   * Очень высокий z-index ставит окно поверх шапки, сайдбара, мобильной навигации и карточек.
+   */
+  return createPortal(
+    <div
+      className="fixed top-0 left-0 z-[10000] flex h-full w-full items-end justify-center sm:items-center sm:p-6"
+      style={{ position: "fixed", inset: 0 }}
+    >
       <div className="absolute inset-0 bg-ink/45 animate-fadein" onClick={onClose} />
       <div
         role="dialog"
@@ -200,7 +210,8 @@ export function Modal({
         </div>
         <div className="px-5 pt-4 pb-[max(env(safe-area-inset-bottom),24px)] sm:px-6 sm:py-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
 import { ICamera, IX } from "./Icons";
 
@@ -89,8 +90,11 @@ export function BarcodeModal({
     };
   }, [start]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
+  return createPortal(
+    <div
+      className="fixed top-0 left-0 z-[10000] flex h-full w-full items-end justify-center sm:items-center sm:p-6"
+      style={{ position: "fixed", inset: 0 }}
+    >
       <div className="absolute inset-0 bg-ink/70 animate-fadein" onClick={onClose} />
       <div
         role="dialog"
@@ -161,6 +165,7 @@ export function BarcodeModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
