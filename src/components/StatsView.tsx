@@ -841,22 +841,15 @@ function SleepZone({
         <p className="mt-1.5 text-[11px] text-faint">пунктир — цель 8 ч</p>
       </div>
 
-      <div className="mt-3 flex items-stretch gap-1.5">
-        <input
-          className="field h-9 w-16 shrink-0 py-0 text-center text-[13px] tabular-nums"
-          placeholder="ч"
-          inputMode="decimal"
-          value={hours}
-          onChange={(e) => setHours(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && save()}
-        />
-        <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-field p-0.5">
+      {/* форма: качество — отдельной строкой, ниже инпут + «ОК» */}
+      <div className="mt-4 flex flex-col gap-2">
+        <div className="flex rounded-xl border border-line bg-field p-0.5">
           {(["bad", "ok", "good"] as const).map((q) => (
             <button
               key={q}
               onClick={() => setQuality(q)}
               title={QUALITY[q].label}
-              className={`min-w-0 flex-1 truncate rounded-lg px-0.5 text-[10px] font-bold transition-colors ${
+              className={`flex-1 rounded-lg py-1.5 text-[11px] font-bold transition-colors ${
                 quality === q ? "bg-ink text-paperink" : "text-faint hover:text-soft"
               }`}
             >
@@ -864,11 +857,24 @@ function SleepZone({
             </button>
           ))}
         </div>
-        <button onClick={save} className="btn-press shrink-0 rounded-xl bg-ink px-2.5 text-[11px] font-bold text-paperink">
-          ОК
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            className="field h-9 min-w-0 flex-1 py-0 text-center text-[13px] tabular-nums"
+            placeholder="часов, напр. 7,5"
+            inputMode="decimal"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+          />
+          <button
+            onClick={save}
+            className="btn-press h-9 min-w-[48px] shrink-0 rounded-xl bg-ink px-3.5 text-xs font-bold text-paperink"
+          >
+            ОК
+          </button>
+        </div>
+        {err && <p className="text-[11px] font-medium text-danger">{err}</p>}
       </div>
-      {err && <p className="mt-1 text-[11px] font-medium text-danger">{err}</p>}
     </section>
   );
 }
