@@ -35,10 +35,10 @@ import {
 type Period = 7 | 14 | 30;
 const PERIODS: Period[] = [7, 14, 30];
 
-const QUALITY: Record<NonNullable<SleepEntry["quality"]>, { label: string; short: string; color: string }> = {
-  good: { label: "Хорошо", short: "Х", color: "var(--color-leaf)" },
-  ok: { label: "Нормально", short: "Н", color: "var(--color-amber)" },
-  bad: { label: "Плохо", short: "П", color: "var(--color-carrot)" },
+const QUALITY: Record<NonNullable<SleepEntry["quality"]>, { label: string; color: string }> = {
+  good: { label: "Хорошо", color: "var(--color-leaf)" },
+  ok: { label: "Нормально", color: "var(--color-amber)" },
+  bad: { label: "Плохо", color: "var(--color-carrot)" },
 };
 
 const num = (s: string) => parseFloat(s.replace(",", "."));
@@ -849,11 +849,11 @@ function SleepZone({
               key={q}
               onClick={() => setQuality(q)}
               title={QUALITY[q].label}
-              className={`flex-1 rounded-lg py-1.5 text-[11px] font-bold transition-colors ${
+              className={`flex-1 whitespace-nowrap rounded-lg px-0.5 py-1.5 text-[10px] font-bold transition-colors sm:text-[11px] ${
                 quality === q ? "bg-ink text-paperink" : "text-faint hover:text-soft"
               }`}
             >
-              {QUALITY[q].short}
+              {QUALITY[q].label}
             </button>
           ))}
         </div>
