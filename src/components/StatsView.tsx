@@ -251,16 +251,18 @@ function WeightZone({ weights }: { weights: WeightEntry[] }) {
   const max = weights.length ? Math.max(...weights.map((w) => w.value)) : 1;
   const span = max - min || 1;
   const PAD = 14;
+  const X0 = 2.5;
+  const X1 = 97.5;
   const yPct = (v: number) => PAD + (1 - (v - min) / span) * (100 - PAD * 2);
   const pts = weights.map((w, i) => ({
-    x: weights.length > 1 ? (i / (weights.length - 1)) * 100 : 50,
+    x: weights.length > 1 ? X0 + (i / (weights.length - 1)) * (X1 - X0) : 50,
     y: yPct(w.value),
   }));
   const line = smoothPath(pts);
-  const area = weights.length > 1 ? `${line} L 100 100 L 0 100 Z` : "";
+  const area = weights.length > 1 ? `${line} L ${X1} 100 L ${X0} 100 Z` : "";
 
   return (
-    <div>
+    <div className="lg:pr-6">
       <ZoneTitle
         icon={<IScale width={16} height={16} />}
         tint="bg-leafwash text-leafdeep"
@@ -476,7 +478,7 @@ function CaloriesZone({
   const today = todayKey();
 
   return (
-    <div>
+    <div className="lg:pr-6">
       <ZoneTitle
         icon={<IFlame width={16} height={16} />}
         tint="bg-carrotwash text-carrot"
@@ -484,7 +486,7 @@ function CaloriesZone({
         right={
           <div className="flex items-center gap-2">
             <span className="text-right">
-              <span className="text-[10px] uppercase tracking-wide text-faint">среднее </span>
+              <span className="text-[10px] tracking-wide text-faint">среднее </span>
               <span className="font-display text-xl font-extrabold leading-none text-carrot tabular-nums">
                 {fmt(avgKcal)}
               </span>
@@ -498,10 +500,10 @@ function CaloriesZone({
 
       <div className="relative mt-5 h-44">
         <div
-          className="pointer-events-none absolute inset-x-0 z-0 border-t-2 border-dashed border-carrot/60"
+          className="pointer-events-none absolute inset-x-1 z-0 border-t-2 border-dashed border-carrot/60"
           style={{ bottom: `${goalPct}%` }}
         />
-        <div className="relative z-10 flex h-full items-end gap-[3px] sm:gap-1.5">
+        <div className="relative z-10 mx-1 flex h-full items-end gap-[3px] sm:gap-1.5">
           {vals.map((v, i) => {
             const h = Math.max(v.kcal > 0 ? 4 : 2, (v.kcal / max) * 100);
             const over = v.kcal > goal;
@@ -541,7 +543,7 @@ function CaloriesZone({
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-faint">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pb-1 text-[11px] text-faint">
         <span>пунктир — дневная цель</span>
         {loggedCount > 0 && (
           <span className="tabular-nums">
@@ -659,15 +661,15 @@ function ActivityZone({
 
       <div className="mt-3 flex gap-1.5">
         <input
-          className="field h-9 w-0 flex-1 py-0 text-sm tabular-nums"
-          placeholder="мин"
+          className="field h-9 w-0 min-w-0 flex-1 py-0 text-[13px] tabular-nums"
+          placeholder="Мин"
           inputMode="numeric"
           value={min}
           onChange={(e) => setMin(e.target.value)}
         />
         <input
-          className="field h-9 w-0 flex-1 py-0 text-sm tabular-nums"
-          placeholder="ккал"
+          className="field h-9 w-0 min-w-0 flex-1 py-0 text-[13px] tabular-nums"
+          placeholder="Ккал"
           inputMode="numeric"
           value={kcal}
           onChange={(e) => setKcal(e.target.value)}
@@ -728,8 +730,8 @@ function StepsZone({
 
       <div className="mt-3 flex gap-1.5">
         <input
-          className="field h-9 flex-1 py-0 text-sm tabular-nums"
-          placeholder="шагов сегодня"
+          className="field h-9 w-0 min-w-0 flex-1 py-0 text-[13px] tabular-nums"
+          placeholder="Шаги"
           inputMode="numeric"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -840,22 +842,22 @@ function SleepZone({
         <p className="mt-1.5 text-[11px] text-faint">пунктир — цель 8 ч</p>
       </div>
 
-      <div className="mt-3 flex gap-1.5">
+      <div className="mt-3 flex items-stretch gap-1.5">
         <input
-          className="field h-9 w-16 shrink-0 py-0 text-sm tabular-nums"
+          className="field h-9 w-14 shrink-0 py-0 text-center text-[13px] tabular-nums"
           placeholder="ч"
           inputMode="decimal"
           value={hours}
           onChange={(e) => setHours(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && save()}
         />
-        <div className="flex min-w-0 flex-1 rounded-xl border border-line bg-field p-0.5">
+        <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-field p-0.5">
           {(["bad", "ok", "good"] as const).map((q) => (
             <button
               key={q}
               onClick={() => setQuality(q)}
               title={QUALITY[q].label}
-              className={`flex-1 rounded-lg text-[11px] font-bold transition-colors ${
+              className={`min-w-0 flex-1 truncate rounded-lg px-0.5 text-[10px] font-bold transition-colors ${
                 quality === q ? "bg-ink text-paperink" : "text-faint hover:text-soft"
               }`}
             >
@@ -863,7 +865,7 @@ function SleepZone({
             </button>
           ))}
         </div>
-        <button onClick={save} className="btn-press shrink-0 rounded-xl bg-ink px-3 text-xs font-bold text-paperink">
+        <button onClick={save} className="btn-press shrink-0 rounded-xl bg-ink px-2.5 text-[11px] font-bold text-paperink">
           ОК
         </button>
       </div>
