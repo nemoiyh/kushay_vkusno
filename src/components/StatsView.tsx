@@ -255,7 +255,7 @@ export function StatsView({
             </div>
           }
         >
-          <Bars values={waterVals} color="var(--color-water)" ref={2000} unit=" мл" />
+          <Bars values={waterVals} color="var(--color-water)" refLine={2000} unit=" мл" />
           <p className="mt-1.5 text-[11px] text-faint">пунктир — 2000 мл · отметки в дневнике</p>
         </Card>
       </div>
@@ -297,23 +297,23 @@ function Card({
 function Bars({
   values,
   color,
-  ref,
+  refLine,
   unit,
   height = 88,
 }: {
   values: number[];
   color: string;
-  ref?: number;
+  refLine?: number;
   unit?: string;
   height?: number;
 }) {
-  const max = Math.max(...values, ref ?? 0, 1) * 1.12;
+  const max = Math.max(...values, refLine ?? 0, 1) * 1.12;
   return (
     <div className="relative mt-3" style={{ height }}>
-      {ref !== undefined && (
+      {refLine !== undefined && (
         <div
           className="pointer-events-none absolute inset-x-0 border-t border-dashed border-line"
-          style={{ bottom: `${(ref / max) * 100}%` }}
+          style={{ bottom: `${(refLine / max) * 100}%` }}
         />
       )}
       <div className="relative flex h-full items-end gap-[3px]">
@@ -669,7 +669,7 @@ function StepsCard({
         </div>
       }
     >
-      <Bars values={vals} color="var(--color-leaf)" ref={10000} height={88} />
+      <Bars values={vals} color="var(--color-leaf)" refLine={10000} height={88} />
       <p className="mt-1.5 text-[11px] text-faint">пунктир — 10 000 · рекорд {fmt(best)}</p>
       <div className="mt-2.5 flex gap-1.5">
         <input
@@ -734,7 +734,7 @@ function SleepCard({
         </div>
       }
     >
-      <Bars values={vals} color="var(--color-teal)" ref={8} unit=" ч" height={88} />
+      <Bars values={vals} color="var(--color-teal)" refLine={8} unit=" ч" height={88} />
       <p className="mt-1.5 flex items-center justify-between text-[11px] text-faint">
         <span>пунктир — 8 ч</span>
         {latest?.quality && (

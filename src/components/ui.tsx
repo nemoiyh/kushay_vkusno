@@ -1,6 +1,48 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import type { ToastItem } from "../types";
 import { IAlert, ICheck, IInfo, IX } from "./Icons";
+
+/* ---------- защита от «белого экрана» ---------- */
+export class ErrorBoundary extends Component<
+  { children: ReactNode; onReset?: () => void },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Ошибка интерфейса:", error, info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="card anim-in mx-auto mt-10 max-w-md p-6 text-center">
+          <div className="mx-auto grid size-12 place-items-center rounded-xl bg-dangerwash text-danger">
+            <IAlert width={22} height={22} />
+          </div>
+          <h2 className="mt-3 font-display text-base font-extrabold">Что-то пошло не так</h2>
+          <p className="mt-1.5 text-sm text-soft">
+            Экран не смог отобразиться. Данные в безопасности — попробуйте ещё раз.
+          </p>
+          <p className="mt-2 break-all rounded-lg bg-paper px-3 py-2 text-left text-[11px] text-faint">
+            {this.state.error.message}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ error: null });
+              this.props.onReset?.();
+            }}
+            className="btn-press mt-4 rounded-xl bg-leaf px-5 py-2.5 text-sm font-bold text-paperink"
+          >
+            Попробовать снова
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /* ---------- плавное число ---------- */
 export function useAnimatedNumber(value: number, duration = 550) {

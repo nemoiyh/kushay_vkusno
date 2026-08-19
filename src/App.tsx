@@ -27,7 +27,7 @@ import {
   upsertByDate,
 } from "./lib/store";
 import { FOODS } from "./data/foods";
-import { ToastStack } from "./components/ui";
+import { ErrorBoundary, ToastStack } from "./components/ui";
 import {
   IApple,
   IBook,
@@ -321,6 +321,7 @@ export default function App() {
 
         {/* контент */}
         <main className="min-w-0 flex-1 py-6 pb-28 lg:pb-12">
+          <ErrorBoundary onReset={() => setView("diary")}>
           <div key={view}>
             {view === "diary" && (
               <>
@@ -377,6 +378,7 @@ export default function App() {
               />
             )}
           </div>
+          </ErrorBoundary>
         </main>
       </div>
 
