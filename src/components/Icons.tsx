@@ -111,6 +111,40 @@ export const IGlobe = (p: P) => (
 export const IStar = (p: P) => (
   <svg {...base(p)}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
 );
+export const ILogout = (p: P) => (
+  <svg {...base(p)}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg>
+);
+export const IEye = (p: P) => (
+  <svg {...base(p)}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+);
+export const IEyeOff = (p: P) => (
+  <svg {...base(p)}><path d="M10.6 5.1A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.2M6.6 6.6A16.7 16.7 0 0 0 2 12s3.5 7 10 7a9.9 9.9 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /><path d="m2 2 20 20" /></svg>
+);
+export const IMail = (p: P) => (
+  <svg {...base(p)}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
+);
+export const ILock = (p: P) => (
+  <svg {...base(p)}><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+);
+export const IUserIcon = (p: P) => (
+  <svg {...base(p)}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+);
+export const ICloudCheck = (p: P) => (
+  <svg {...base(p)}><path d="M17.5 19a4.5 4.5 0 0 0 .42-8.98 6 6 0 0 0-11.7 1.6A3.5 3.5 0 0 0 6.5 19Z" /><path d="m9 14.5 2 2 4-4" /></svg>
+);
+export const IGoogle = (p: P) => (
+  <svg {...base({ ...p, fill: "currentColor", stroke: "none" })}>
+    <path d="M21.6 12.2c0-.7-.06-1.36-.18-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3.02v2.5h3.22c1.88-1.74 2.98-4.3 2.98-7.32Z" />
+    <path d="M12 21.5c2.7 0 4.96-.9 6.62-2.42l-3.22-2.5c-.9.6-2.04.95-3.4.95-2.6 0-4.82-1.76-5.62-4.13H3.05v2.58A9.99 9.99 0 0 0 12 21.5Z" opacity=".85" />
+    <path d="M6.38 13.4a6 6 0 0 1 0-3.82V7H3.05a10 10 0 0 0 0 8.98l3.33-2.58Z" opacity=".7" />
+    <path d="M12 6.47c1.47 0 2.79.5 3.83 1.5l2.86-2.86A9.98 9.98 0 0 0 3.05 7l3.33 2.58c.8-2.36 3.02-4.1 5.62-4.1Z" opacity=".9" />
+  </svg>
+);
+export const IVk = (p: P) => (
+  <svg {...base({ ...p, fill: "currentColor", stroke: "none" })}>
+    <path d="M13.02 17.55c-5.9 0-9.27-4.04-9.41-10.78h2.95c.09 4.96 2.27 7.05 3.99 7.48V6.77h2.78v4.23c1.7-.18 3.48-2.11 4.08-4.23h2.77c-.46 2.6-2.4 4.53-3.77 5.32 1.37.64 3.58 2.32 4.42 5.46h-3.05c-.66-2.04-2.29-3.61-4.45-3.83v3.83h-.31Z" />
+  </svg>
+);
 export const IChefHat = (p: P) => (
   <svg {...base(p)}><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z" /><path d="M6 17h12" /></svg>
 );

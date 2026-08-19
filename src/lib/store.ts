@@ -260,6 +260,10 @@ function seedState(): AppData {
   };
 }
 
+const MODIFIED_KEY = "seyedeno:modified";
+/** undefined — не инициализирован, null — требуется «перебаза» после миграции данных */
+let baseline: string | null | undefined = undefined;
+
 export function loadState(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -267,6 +271,7 @@ export function loadState(): AppData {
       const parsed = JSON.parse(raw) as AppData;
       if (parsed && parsed.days && parsed.goals && parsed.profile) {
         // миграция со старых версий данных
+        baseline = raw;
         return {
           ...parsed,
           customFoods: parsed.customFoods ?? [],
@@ -285,17 +290,36 @@ export function loadState(): AppData {
     /* повреждённые данные — начнём заново */
   }
   const fresh = seedState();
+  const str = JSON.stringify(fresh);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+    localStorage.setItem(STORAGE_KEY, str);
   } catch { /* приватный режим — работаем в памяти */ }
+  baseline = str;
   return fresh;
 }
 
 export function saveState(data: AppData) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const str = JSON.stringify(data);
+    localStorage.setItem(STORAGE_KEY, str);
+    // если данные изменились относительно исходного снимка — помечаем как «изменено локально»
+    // (используется при миграции данных в аккаунт)
+    if (baseline === null) baseline = str;
+    else if (baseline !== undefined && str !== baseline) localStorage.setItem(MODIFIED_KEY, "1");
   } catch { /* ignore */ }
 }
+
+/** менял ли пользователь локальные данные (дневник, продукты, цели) */
+export const isLocallyModified = () => localStorage.getItem(MODIFIED_KEY) === "1";
+
+/** сбросить флаг после объединения/замены данных (следующая запись станет новой базой) */
+export function resetModifiedFlag() {
+  try { localStorage.removeItem(MODIFIED_KEY); } catch { /* ignore */ }
+  baseline = null;
+}
+
+/** «чистое» демо-состояние — для сценария «начать заново» */
+export const createFreshState = () => seedState();
 
 export const fmt = (n: number) => n.toLocaleString("ru-RU");
 
