@@ -42,6 +42,12 @@ import {
   signOut,
   type SessionUser,
 } from "./lib/auth";
+import {
+  clearVkSession,
+  getVkProfile,
+  hasVkSession,
+} from "./lib/vkid";
+import { cloudLoadData, cloudSaveData } from "./lib/supabase";
 import { FOODS } from "./data/foods";
 import { ErrorBoundary, ToastStack } from "./components/ui";
 import {
@@ -77,14 +83,34 @@ export default function App() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [booting, setBooting] = useState(true);
 
-  // при старте проверяем сохранённую сессию (токен молча продлевается, если истёк)
+  // при старте проверяем сессию: сначала VK ID (vk_token), затем демо-режим
   useEffect(() => {
     const t = window.setTimeout(() => {
-      const u = restoreSession();
+      let u: SessionUser | null = null;
+
+      // 1) активная сессия VK ID
+      if (hasVkSession()) {
+        const p = getVkProfile();
+        if (p) {
+          u = {
+            id: `vk-${p.user_id}`,
+            email: p.email ?? `id${p.user_id}@vk.ru`,
+            name: p.name,
+            provider: "vk",
+          };
+        }
+      }
+      // 2) демо-сессия (email/пароль)
+      if (!u) u = restoreSession();
+
       if (u) {
         const acc = loadAccountData(u.id);
         if (acc) setData(acc.data);
         resetModifiedFlag();
+        // подтягиваем свежие данные из облака (Supabase), если настроен
+        cloudLoadData(u.id).then((cloud) => {
+          if (cloud) setData(cloud);
+        });
       }
       setUser(u);
       setBooting(false);
@@ -94,8 +120,11 @@ export default function App() {
 
   useEffect(() => {
     saveState(data);
-    // при входе в аккаунт данные дополнительно сохраняются в его «облачное» хранилище
-    if (user) saveAccountData(user.id, data);
+    // при входе в аккаунт данные сохраняются локально и (если настроен) в облако Supabase
+    if (user) {
+      saveAccountData(user.id, data);
+      cloudSaveData(user.id, data);
+    }
   }, [data, user]);
 
   const handleAuthDone = useCallback((u: SessionUser, merged?: AppData) => {
@@ -107,11 +136,17 @@ export default function App() {
       if (acc) setData(acc.data);
       else setData(createFreshState());
     }
+    // после входа дополнительно подтягиваем данные из облака (Supabase), если они новее
+    cloudLoadData(u.id).then((cloud) => {
+      if (cloud && !merged) setData(cloud);
+    });
   }, []);
 
   const handleLogout = useCallback(() => {
     if (user) saveAccountData(user.id, data);
+    // выход: чистим и демо-сессию, и сессию VK ID (vk_token / user_profile)
     signOut();
+    clearVkSession();
     setUser(null);
     setData(createFreshState());
     resetModifiedFlag();

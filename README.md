@@ -147,13 +147,46 @@ npx cap open android   # открыть проект в Android Studio
 - Заменить `appId` в `capacitor.config.ts` и название приложения `appName`.
 - Обновить версию: `CFBundleShortVersionString` в Xcode / `versionName` в Android.
 
+## Авторизация (VK ID) и база данных (Supabase)
+
+**Вход — только через VK ID.** Авторизация полностью делегирована нативному OneTap-виджету VK ID
+(`src/lib/vkid.ts`): после входа SDK возвращает authorization code, мы обмениваем его на токены
+через `VKID.Auth.exchangeCode` и храним в localStorage (`vk_token`, `user_profile`).
+Supabase для авторизации **не используется** — только как база данных.
+
+- Конфиг виджета: `app: 54728657`, `redirectUrl: https://kushayvkusno.netlify.app/`, SDK `@vkid/sdk@2.1.0`.
+- При запуске приложение проверяет `vk_token`: если он есть — открывается дневник, иначе — экран входа.
+- Кнопка «Выйти» (Настройки → Аккаунт) чистит `vk_token` и `user_profile` и возвращает на экран входа.
+- На экране входа также есть «демо-режим» (email/пароль, данные только в этом браузере) —
+  виджет VK ID работает только на домене, указанном в `redirectUrl`.
+
+**Supabase — только CRUD** (`src/lib/supabase.ts`). Клиент создаётся лениво и только при наличии
+переменных окружения, иначе приложение работает на localStorage:
+
+```
+VITE_SUPABASE_URL=https://<проект>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-ключ>
+```
+
+Данные синхронизируются в таблицу `kv_data` (колонки `user_id text`, `payload jsonb`, `updated_at timestamptz`).
+Для записи анонимным пользователям настройте RLS:
+
+```sql
+create policy "allow all for public" on kv_data for all using (true) with check (true);
+-- или временно для тестов:
+-- alter table kv_data disable row level security;
+```
+
 ## Структура
 
 ```
 src/
-  components/   — экраны (Дневник, Продукты, Статистика, Цели), модальные окна, UI-кит
+  components/   — экраны (Дневник, Продукты, Статистика, Настройки), AuthScreen, модальные окна, UI-кит
   data/foods.ts — база продуктов (КБЖУ на 100 г)
   lib/store.ts  — localStorage, даты, расчёты, демо-данные
+  lib/vkid.ts   — вход через VK ID (OneTap-виджет, обмен code → токены)
+  lib/supabase.ts — Supabase-клиент (только CRUD, ленивая загрузка)
+  lib/auth.ts   — демо-режим (email/пароль) и локальные «облачные» данные
 public/
   manifest.webmanifest, sw.js — PWA-обвязка (манифест + офлайн-кэш)
 scripts/build-apk.sh — локальная сборка Android-версии

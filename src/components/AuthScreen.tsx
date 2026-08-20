@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData } from "../types";
 import type { Provider, SessionUser } from "../lib/auth";
+import { renderVkOneTap, saveVkSession, type VkTokenResponse } from "../lib/vkid";
 import {
   AuthError,
-  PROVIDER_LABEL,
-  isAppleDevice,
   isValidEmail,
   loadAccountData,
   passwordStrength,
@@ -12,7 +11,6 @@ import {
   resetPassword,
   saveAccountData,
   signin,
-  signinWithProvider,
   signup,
 } from "../lib/auth";
 import { createFreshState, fmt, isLocallyModified, resetModifiedFlag } from "../lib/store";
@@ -26,10 +24,8 @@ import {
   ICloudCheck,
   IEye,
   IEyeOff,
-  IGoogle,
   ILock,
   IMail,
-  IVk,
   LogoMark,
 } from "./Icons";
 
@@ -43,7 +39,6 @@ export function AuthScreen({
   onDone: (user: SessionUser, data?: AppData) => void;
 }) {
   const [mode, setMode] = useState<Mode>("landing");
-  const [oauthBusy, setOauthBusy] = useState<Exclude<Provider, "password"> | null>(null);
   const [merge, setMerge] = useState<{ user: SessionUser; cloud: { data: AppData; syncedAt: number } | null } | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
 
@@ -59,16 +54,17 @@ export function AuthScreen({
     }
   };
 
-  const handleOAuth = async (p: Exclude<Provider, "password">) => {
-    setOauthBusy(p);
-    try {
-      finish(await signinWithProvider(p));
-    } finally {
-      setOauthBusy(null);
-    }
+  /** Успешный вход через VK ID: сохраняем токен/профиль и переходим в приложение */
+  const handleVkLogin = (data: VkTokenResponse) => {
+    const profile = saveVkSession(data);
+    finish({
+      id: `vk-${profile.user_id}`,
+      email: profile.email ?? `id${profile.user_id}@vk.ru`,
+      name: profile.name,
+      provider: "vk",
+    });
   };
 
-  const apple = isAppleDevice();
   const localEntries = Object.values(localData.days).reduce((s, d) => s + d.entries.length, 0);
 
   return (
@@ -143,14 +139,11 @@ export function AuthScreen({
         {/* карточка входа */}
         <section className="w-full max-w-md">
           <div className="card hard-sm p-6 sm:p-7">
-            {oauthBusy ? (
-              <OAuthBusy provider={oauthBusy} />
-            ) : mode === "landing" ? (
+            {mode === "landing" ? (
               <Landing
                 onLogin={() => setMode("login")}
                 onRegister={() => setMode("register")}
-                onOAuth={handleOAuth}
-                apple={apple}
+                onVkLogin={handleVkLogin}
               />
             ) : mode === "login" ? (
               <LoginForm onBack={() => setMode("landing")} onForgot={() => setMode("forgot")} onSwitch={() => setMode("register")} onSuccess={finish} />
@@ -248,74 +241,116 @@ export function AuthScreen({
 function Landing({
   onLogin,
   onRegister,
-  onOAuth,
-  apple,
+  onVkLogin,
 }: {
   onLogin: () => void;
   onRegister: () => void;
-  onOAuth: (p: Exclude<Provider, "password">) => void;
-  apple: boolean;
+  onVkLogin: (data: VkTokenResponse) => void;
 }) {
+  const [vkError, setVkError] = useState<string | null>(null);
+  const [demoOpen, setDemoOpen] = useState(false);
+
   return (
     <div className="anim-in">
       <h2 className="font-display text-lg font-extrabold">Добро пожаловать</h2>
-      <p className="mt-1 text-[13px] text-soft">Войдите или создайте аккаунт, чтобы начать</p>
+      <p className="mt-1 text-[13px] text-soft">Войдите через VK ID, чтобы начать</p>
 
-      <div className="mt-5 flex flex-col gap-2.5">
-        <button
-          onClick={onLogin}
-          className="btn-press rounded-xl bg-leaf px-4 py-3 text-sm font-bold text-paperink"
-        >
-          Войти
-        </button>
-        <button
-          onClick={onRegister}
-          className="btn-press rounded-xl border border-leaf/45 bg-leafwash/50 px-4 py-3 text-sm font-bold text-leafdeep hover:bg-leafwash"
-        >
-          Зарегистрироваться
-        </button>
+      {/* Главный способ входа — нативный виджет VK ID (OneTap) */}
+      <div className="mt-5">
+        <VkOneTapWidget
+          onSuccess={onVkLogin}
+          onError={(err) =>
+            setVkError(err instanceof Error ? err.message : "Не удалось войти через VK ID")
+          }
+        />
+        {vkError && (
+          <p className="anim-in mt-2.5 rounded-xl border border-danger/35 bg-dangerwash px-3 py-2 text-xs font-semibold text-danger">
+            {vkError}
+          </p>
+        )}
       </div>
 
       <div className="my-5 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wider text-faint">
         <span className="h-px flex-1 bg-line" />
-        или войти через
+        или демо-режим
         <span className="h-px flex-1 bg-line" />
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-        <SocialBtn label="Google" onClick={() => onOAuth("google")}><IGoogle width={18} height={18} className="text-[#3c73d9]" /></SocialBtn>
-        <SocialBtn label="ВКонтакте" onClick={() => onOAuth("vk")}><IVk width={18} height={18} className="text-[#07f]" /></SocialBtn>
-        {apple && (
-          <SocialBtn label="Apple" onClick={() => onOAuth("apple")}><IApple width={18} height={18} /></SocialBtn>
-        )}
-      </div>
-      {!apple && (
-        <p className="mt-2 text-center text-[10px] text-faint">Вход через Apple доступен на устройствах Apple</p>
+      {/* Демо-режим (email/пароль, данные только в этом браузере) */}
+      {!demoOpen ? (
+        <button
+          onClick={() => setDemoOpen(true)}
+          className="btn-press w-full rounded-xl border border-dashed border-line bg-field/60 px-4 py-2.5 text-xs font-semibold text-soft hover:border-leaf/50 hover:text-ink"
+        >
+          Войти без VK ID (демо)
+        </button>
+      ) : (
+        <div className="anim-in flex flex-col gap-2.5">
+          <button
+            onClick={onLogin}
+            className="btn-press rounded-xl bg-leaf px-4 py-3 text-sm font-bold text-paperink"
+          >
+            Войти
+          </button>
+          <button
+            onClick={onRegister}
+            className="btn-press rounded-xl border border-leaf/45 bg-leafwash/50 px-4 py-3 text-sm font-bold text-leafdeep hover:bg-leafwash"
+          >
+            Зарегистрироваться
+          </button>
+        </div>
       )}
     </div>
   );
 }
 
-function SocialBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="btn-press flex flex-col items-center gap-1.5 rounded-xl border border-line bg-field px-2 py-3 text-[11px] font-bold text-soft hover:text-ink"
-    >
-      {children}
-      {label}
-    </button>
-  );
-}
+/** Нативный OneTap-виджет VK ID. Рендерится в контейнер силами SDK. */
+function VkOneTapWidget({
+  onSuccess,
+  onError,
+}: {
+  onSuccess: (data: VkTokenResponse) => void;
+  onError: (error: unknown) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
 
-function OAuthBusy({ provider }: { provider: Exclude<Provider, "password"> }) {
+  useEffect(() => {
+    let dispose: (() => void) | null = null;
+    let alive = true;
+    if (containerRef.current) {
+      renderVkOneTap(
+        containerRef.current,
+        onSuccess,
+        (err) => {
+          if (!alive) return;
+          setFailed(true);
+          onError(err);
+        },
+      ).then((d) => {
+        if (alive) dispose = d;
+      });
+    }
+    return () => {
+      alive = false;
+      dispose?.();
+    };
+    // рендерим один раз при монтировании
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div className="anim-in flex flex-col items-center gap-4 py-10 text-center">
-      <span className="spinner" style={{ width: 30, height: 30, borderWidth: 3 }} />
-      <div>
-        <p className="font-display text-sm font-bold">Соединяемся с {PROVIDER_LABEL[provider]}…</p>
-        <p className="mt-1 text-xs text-faint">Подтвердите вход в окне провайдера</p>
-      </div>
+    <div>
+      <div
+        id="vk-auth-container"
+        ref={containerRef}
+        className="min-h-12 overflow-hidden rounded-xl"
+      />
+      {failed && (
+        <p className="mt-2 text-center text-[11px] text-faint">
+          Виджет VK ID недоступен в этой среде — используйте демо-режим ниже.
+        </p>
+      )}
     </div>
   );
 }

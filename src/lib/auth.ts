@@ -291,7 +291,7 @@ export function accountSyncedAt(userId: string): number | null {
 export const PROVIDER_LABEL: Record<Provider, string> = {
   password: "Пароль",
   google: "Google",
-  vk: "ВКонтакте",
+  vk: "VK ID",
   apple: "Apple",
 };
 
