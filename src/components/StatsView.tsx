@@ -229,10 +229,14 @@ function ZoneTitle({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${tint}`}>{icon}</span>
-      <h2 className="font-display text-[13px] font-bold">{title}</h2>
-      <div className="ml-auto min-w-0 text-right">{right}</div>
+    <div className="flex min-w-0 items-center justify-between gap-3">
+      {/* левая группа: иконка + название всегда вместе */}
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${tint}`}>{icon}</span>
+        <h2 className="min-w-0 font-display text-[13px] font-bold leading-tight">{title}</h2>
+      </div>
+      {/* правая группа: цифры не сжимаются и не налезают на заголовок */}
+      {right && <div className="shrink-0">{right}</div>}
     </div>
   );
 }
@@ -531,14 +535,18 @@ function CaloriesZone({
         tint="bg-carrotwash text-carrot"
         title="Калории по дням"
         right={
-          <div className="flex items-center gap-2">
-            <span className="text-right">
-              <span className="text-[10px] tracking-wide text-faint">среднее </span>
-              <span className="font-display text-xl font-extrabold leading-none text-carrot tabular-nums">
+          /* правая группа: [среднее + цифра] и [цель].
+             На экранах <480px блоки встают вертикально, <400px — слово «среднее» скрывается */
+          <div className="flex items-center gap-2.5 max-[480px]:flex-col max-[480px]:items-end max-[480px]:gap-1">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-faint max-[400px]:hidden">
+                среднее
+              </span>
+              <span className="whitespace-nowrap font-display text-xl font-extrabold leading-none text-carrot tabular-nums">
                 {fmt(avgKcal)}
               </span>
             </span>
-            <span className="rounded-full bg-paper px-2 py-1 text-[10px] font-bold text-faint tabular-nums">
+            <span className="whitespace-nowrap rounded-full bg-paper px-2 py-1 text-[10px] font-bold text-faint tabular-nums">
               цель {fmt(goal)}
             </span>
           </div>
