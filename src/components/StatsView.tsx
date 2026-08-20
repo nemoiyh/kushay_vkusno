@@ -162,95 +162,51 @@ export function StatsView({
         }
 
         return (
-          <div className="mt-5 flex flex-col gap-5">
-            {/* РЯД 1 · Вес + Замеры тела */}
-            {showRow1 && (
-              <section className="card p-5 sm:p-6">
-                <div className={`grid gap-6 ${vis.weight && vis.measures ? "lg:grid-cols-[1.25fr_1fr] lg:gap-0" : ""}`}>
-                  {vis.weight && <WeightZone weights={weights} onWeight={onWeight} />}
-                  {vis.measures && (
-                    <div className={vis.weight ? "border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}>
-                      <MeasuresZone measures={data.measures} onSave={onMeasures} />
-                    </div>
-                  )}
-                </div>
+          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {vis.weight && (
+              <section className="card flex flex-col p-5">
+                <WeightZone weights={weights} onWeight={onWeight} />
               </section>
             )}
-
-            {/* РЯД 2 · Калории + БЖУ */}
-            {showRow2 && (
-              <section className="card p-5 sm:p-6">
-                <div className={`grid gap-6 ${vis.calories && vis.macros ? "lg:grid-cols-[1.6fr_1fr] lg:gap-0" : ""}`}>
-                  {vis.calories && (
-                    <CaloriesZone
-                      keys={keys}
-                      vals={dayVals}
-                      goal={data.goals.kcal}
-                      avgKcal={avgKcal}
-                      onGoal={onGoal}
-                      loggedCount={logged.length}
-                      streak={streak}
-                      showWeekdays={period === 7}
-                    />
-                  )}
-                  {vis.macros && (
-                    <div className={vis.calories ? "border-t border-dashed border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}>
-                      <MacrosZone
-                        avgP={avgP}
-                        avgF={avgF}
-                        avgC={avgC}
-                        goals={data.goals}
-                        period={period}
-                      />
-                    </div>
-                  )}
-                </div>
+            {vis.measures && (
+              <section className="card flex flex-col p-5">
+                <MeasuresZone measures={data.measures} onSave={onMeasures} />
               </section>
             )}
-
-            {/* РЯД 3 · Активность + Шаги — широкая карточка на всю ширину (50/50) */}
-            {showRow3 && (
-              <section className="card p-5 sm:p-6">
-                <div className={`grid grid-cols-1 gap-6 ${vis.activity && vis.steps ? "md:grid-cols-2 md:gap-0" : ""}`}>
-                  {vis.activity && (
-                    <ActivityZone
-                      vals={actVals}
-                      today={todayAct}
-                      onSave={onActivity}
-                      className={vis.steps ? "md:pr-6" : ""}
-                    />
-                  )}
-                  {vis.steps && (
-                    <StepsZone
-                      vals={stepsVals}
-                      avg={Math.round(avgOf(stepsVals))}
-                      today={todaySteps?.value}
-                      onSave={onSteps}
-                      className={vis.activity ? "border-t border-dashed border-line pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0" : ""}
-                    />
-                  )}
-                </div>
+            {vis.calories && (
+              <section className="card flex flex-col p-5">
+                <CaloriesZone
+                  keys={keys}
+                  vals={dayVals}
+                  goal={data.goals.kcal}
+                  avgKcal={avgKcal}
+                  onGoal={onGoal}
+                  loggedCount={logged.length}
+                  streak={streak}
+                  showWeekdays={period === 7}
+                />
               </section>
             )}
-
-            {/* РЯД 4 · Сон и Вода — рядом, по 50% */}
-            {showRow4 && (
-              <div className="grid gap-5 md:grid-cols-2">
-                {vis.sleep && (
-                  <SleepZone
-                    vals={sleepVals}
-                    avg={avgOf(sleepVals)}
-                    today={todaySleep}
-                    onSave={onSleep}
-                  />
-                )}
-                {vis.water && (
-                  <WaterZone
-                    vals={waterVals}
-                    avg={avgOf(waterVals)}
-                  />
-                )}
-              </div>
+            {vis.macros && (
+              <section className="card flex flex-col p-5">
+                <MacrosZone avgP={avgP} avgF={avgF} avgC={avgC} goals={data.goals} period={period} />
+              </section>
+            )}
+            {vis.activity && (
+              <section className="card flex flex-col p-5">
+                <ActivityZone vals={actVals} today={todayAct} onSave={onActivity} />
+              </section>
+            )}
+            {vis.steps && (
+              <section className="card flex flex-col p-5">
+                <StepsZone vals={stepsVals} avg={Math.round(avgOf(stepsVals))} today={todaySteps?.value} onSave={onSteps} />
+              </section>
+            )}
+            {vis.sleep && (
+              <SleepZone vals={sleepVals} avg={avgOf(sleepVals)} today={todaySleep} onSave={onSleep} />
+            )}
+            {vis.water && (
+              <WaterZone vals={waterVals} avg={avgOf(waterVals)} />
             )}
           </div>
         );
@@ -335,7 +291,7 @@ function WeightZone({ weights, onWeight }: { weights: WeightEntry[]; onWeight: (
   };
 
   return (
-    <div className="lg:pr-6">
+    <div className="flex h-full flex-col">
       <ZoneTitle
         icon={<IScale width={16} height={16} />}
         tint="bg-leafwash text-leafdeep"
@@ -569,7 +525,7 @@ function CaloriesZone({
   const today = todayKey();
 
   return (
-    <div className="lg:pr-6">
+    <div className="flex h-full flex-col">
       <ZoneTitle
         icon={<IFlame width={16} height={16} />}
         tint="bg-carrotwash text-carrot"

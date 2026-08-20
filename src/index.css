@@ -119,6 +119,10 @@ input[type="range"] { accent-color: var(--color-leaf); }
 *::-webkit-scrollbar-thumb { background: rgba(23, 40, 30, 0.18); border-radius: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 
+/* скрытая полоса прокрутки (вкладки, горизонтальные ленты) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* ---------- motion ---------- */
 @keyframes fadein { from { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(16px) scale(0.985); } }
@@ -199,14 +203,35 @@ button, a, label, summary {
 
 /* ---------- iPhone: клавиатура и safe-areas ---------- */
 .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+/* боковые safe-area (ландшафт с «чёлкой») + базовый отступ */
+.px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+@media (min-width: 640px) {
+  .px-safe {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+}
 
-/* на iOS поля с шрифтом меньше 16px приближают экран при фокусе */
-@media (max-width: 640px) {
+/* на iOS поля с шрифтом меньше 16px приближают экран при фокусе;
+   высота инпута на тач-устройствах — минимум 48px (стандарт Apple/Google) */
+@media (max-width: 768px) {
   .field {
     font-size: 16px;
-    padding: 11px 12px;
+    line-height: 1.5;
+    padding: 12px 14px;
+    min-height: 48px;
   }
   input:not([type="range"]):not([type="checkbox"]) {
     font-size: 16px;
   }
+  /* крупные тач-цели для главных кнопок */
+  .tap { min-width: 44px; min-height: 44px; }
+}
+
+/* базовый размер текста на смартфонах — не мельче 16px */
+@media (max-width: 480px) {
+  html { font-size: 16px; }
 }

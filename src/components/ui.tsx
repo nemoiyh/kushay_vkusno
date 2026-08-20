@@ -190,7 +190,7 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative w-full sm:max-w-xl max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-line bg-card hard-sm animate-rise"
+        className="relative h-[90dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-card hard-sm animate-rise sm:h-auto sm:max-h-[85dvh] sm:max-w-xl sm:rounded-2xl"
         style={{ boxShadow: "0 24px 60px rgba(23,40,30,0.28)" }}
       >
         {/* «ручка» нижней шторки — как в нативных приложениях iOS */}

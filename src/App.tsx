@@ -439,7 +439,7 @@ export default function App() {
     <div className="min-h-dvh">
       {/* шапка */}
       <header className="sticky top-0 z-40 border-b border-line bg-paper/85 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-center gap-3 px-4 py-2.5 sm:px-6">
+        <div className="px-safe mx-auto flex w-full max-w-6xl items-center justify-center gap-3 py-2.5">
           <LogoMark size={38} />
           <div className="leading-none">
             <div className="font-display text-[15px] font-extrabold tracking-wide sm:text-base">КУШАЙ ВКУСНО</div>
@@ -469,7 +469,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="mx-auto flex max-w-6xl gap-6 px-4 sm:px-6">
+      <div className="px-safe mx-auto flex w-full max-w-6xl gap-6">
         {/* сайдбар */}
         <aside className="sticky top-[73px] hidden h-[calc(100dvh-73px)] w-52 shrink-0 flex-col py-6 lg:flex">
           <nav className="flex flex-col gap-1.5">

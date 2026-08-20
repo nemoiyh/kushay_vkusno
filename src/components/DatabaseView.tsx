@@ -349,13 +349,13 @@ export function DatabaseView({
         </div>
       ) : (
         <>
-          {/* вкладки */}
-          <div className="mt-4 flex rounded-xl border border-line bg-card p-1 hard-sm">
+          {/* вкладки: на узких экранах — горизонтальный скролл */}
+          <div className="no-scrollbar mt-4 flex gap-1 overflow-x-auto rounded-xl border border-line bg-card p-1 hard-sm">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-colors sm:text-[13px] ${
+                className={`flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold transition-colors sm:flex-1 sm:text-[13px] ${
                   tab === t.id ? "bg-ink text-paperink" : "text-soft hover:text-ink"
                 }`}
               >
@@ -588,7 +588,7 @@ function FoodRow({
       <button
         onClick={onAdd}
         aria-label={`Добавить ${food.name} в дневник`}
-        className="btn-press grid size-9 shrink-0 place-items-center rounded-lg border border-leaf/40 bg-leafwash text-leafdeep hover:bg-leaf hover:text-paperink"
+        className="btn-press tap grid size-9 shrink-0 place-items-center rounded-lg border border-leaf/40 bg-leafwash text-leafdeep hover:bg-leaf hover:text-paperink"
       >
         <IPlus width={16} height={16} />
       </button>

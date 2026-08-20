@@ -282,7 +282,7 @@ function Landing({
         <span className="h-px flex-1 bg-line" />
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         <SocialBtn label="Google" onClick={() => onOAuth("google")}><IGoogle width={18} height={18} className="text-[#3c73d9]" /></SocialBtn>
         <SocialBtn label="ВКонтакте" onClick={() => onOAuth("vk")}><IVk width={18} height={18} className="text-[#07f]" /></SocialBtn>
         {apple && (
