@@ -26,6 +26,32 @@ npm run dev       # разработка
 npm run build     # прод-сборка в dist/
 ```
 
+## Деплой на Netlify (сайт)
+
+Проект готов к деплою: в корне лежит `netlify.toml` (сборка `npm run build`, публикация `dist`,
+SPA-редиректы и запрет кэширования service worker), в `public/_redirects` — дублирующее правило.
+
+**Способ 1 — drag-and-drop (без Git, 1 минута):**
+
+1. `npm run build` — появится папка `dist`
+2. Откройте [app.netlify.com/drop](https://app.netlify.com/drop)
+3. Перетащите папку `dist` в окно браузера — сайт сразу доступен по адресу `https://имя.netlify.app`
+4. (опционально) Site settings → Change site name — задайте своё имя, например `kushai-vkusno`
+
+При каждой пересборке просто перетаскиваете новую папку `dist` (Deploys → Drag & drop).
+
+**Способ 2 — через Git (автодеплой при каждом push):**
+
+1. Загрузите проект в репозиторий (GitHub/GitLab/Bitbucket)
+2. Netlify → Add new site → Import an existing project → выберите репозиторий
+3. Настройки подхватятся из `netlify.toml`: Build command `npm run build`, Publish directory `dist`
+4. Каждый `git push` будет собирать и публиковать новую версию автоматически
+
+**Проверка после деплоя:** HTTPS включается автоматически (нужен для камеры-сканера и установки
+PWA). Откройте сайт на телефоне — предложит «Установить приложение».
+
+> Важно: `netlify.toml` и `public/_redirects` уже в репозитории — ничего настраивать вручную не нужно.
+
 ## Как установить на телефон прямо сейчас (без App Store)
 
 Приложение — PWA. Откройте его в браузере:

@@ -31,7 +31,17 @@ import {
   todayKey,
   uid,
   upsertByDate,
+  createFreshState,
+  resetModifiedFlag,
 } from "./lib/store";
+import {
+  PROVIDER_LABEL,
+  loadAccountData,
+  restoreSession,
+  saveAccountData,
+  signOut,
+  type SessionUser,
+} from "./lib/auth";
 import { FOODS } from "./data/foods";
 import { ErrorBoundary, ToastStack } from "./components/ui";
 import {
@@ -46,6 +56,7 @@ import { DiaryView } from "./components/DiaryView";
 import { DatabaseView } from "./components/DatabaseView";
 import { StatsView } from "./components/StatsView";
 import { SettingsView } from "./components/SettingsView";
+import { AuthScreen } from "./components/AuthScreen";
 import { AddEntryModal, type EntryDraftInput } from "./components/AddEntryModal";
 
 const NAV: { id: View; label: string; icon: typeof IBook }[] = [
@@ -62,7 +73,50 @@ export default function App() {
   const [draft, setDraft] = useState<(EntryDraftInput & { dateKey: string; ts: number }) | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  useEffect(() => saveState(data), [data]);
+  /* ------- аккаунт: сессия, «облако», выход ------- */
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [booting, setBooting] = useState(true);
+
+  // при старте проверяем сохранённую сессию (токен молча продлевается, если истёк)
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const u = restoreSession();
+      if (u) {
+        const acc = loadAccountData(u.id);
+        if (acc) setData(acc.data);
+        resetModifiedFlag();
+      }
+      setUser(u);
+      setBooting(false);
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    saveState(data);
+    // при входе в аккаунт данные дополнительно сохраняются в его «облачное» хранилище
+    if (user) saveAccountData(user.id, data);
+  }, [data, user]);
+
+  const handleAuthDone = useCallback((u: SessionUser, merged?: AppData) => {
+    setUser(u);
+    resetModifiedFlag();
+    if (merged) setData(merged);
+    else {
+      const acc = loadAccountData(u.id);
+      if (acc) setData(acc.data);
+      else setData(createFreshState());
+    }
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    if (user) saveAccountData(user.id, data);
+    signOut();
+    setUser(null);
+    setData(createFreshState());
+    resetModifiedFlag();
+    setView("diary");
+  }, [user, data]);
 
   const toast = useCallback((text: string, kind: ToastKind = "success") => {
     const id = uid();
@@ -376,6 +430,11 @@ export default function App() {
 
   /* ------- рендер ------- */
 
+  // проверка сессии при старте — спиннер вместо мигающего экрана входа
+  if (booting) return <Splash />;
+  // защита интерфейса: без авторизации показывается только экран входа
+  if (!user) return <AuthScreen localData={data} onDone={handleAuthDone} />;
+
   return (
     <div className="min-h-dvh">
       {/* шапка */}
@@ -513,6 +572,7 @@ export default function App() {
                 pwa={{ canInstall: !!pwaEvent, installed, promptInstall }}
                 statsVisibility={data.statsVisibility}
                 onToggleStat={toggleStatBlock}
+                account={{ user, providerLabel: PROVIDER_LABEL[user.provider], onLogout: handleLogout }}
               />
             )}
           </div>
@@ -556,6 +616,28 @@ export default function App() {
       )}
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+    </div>
+  );
+}
+
+/* ---------- заставка при запуске ---------- */
+
+function Splash() {
+  return (
+    <div className="grid min-h-dvh place-items-center px-6">
+      <div className="flex flex-col items-center text-center">
+        <div className="splash-ring grid size-24 place-items-center rounded-[26%] border border-line bg-card hard-sm">
+          <LogoMark size={56} />
+        </div>
+        <div className="mt-5 font-display text-lg font-extrabold tracking-wide">КУШАЙ ВКУСНО</div>
+        <div className="mt-1 text-[11px] font-medium tracking-[0.22em] text-soft">НЕ БУДЕТ ГРУСТНО</div>
+        <div className="mt-6 flex items-center gap-1.5" aria-label="Загрузка">
+          <span className="splash-dot size-2 rounded-full bg-leaf" />
+          <span className="splash-dot size-2 rounded-full bg-leaf" style={{ animationDelay: "0.15s" }} />
+          <span className="splash-dot size-2 rounded-full bg-leaf" style={{ animationDelay: "0.3s" }} />
+        </div>
+        <p className="mt-4 text-xs text-faint">Проверяем аккаунт…</p>
+      </div>
     </div>
   );
 }

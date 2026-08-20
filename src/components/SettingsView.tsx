@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { AppData, Goals, Profile, StatsBlockKey } from "../types";
 import { FOODS } from "../data/foods";
 import { fmt } from "../lib/store";
+import { accountSyncedAt, type SessionUser } from "../lib/auth";
 import { GoalsView } from "./GoalsView";
 import {
   IActivity,
@@ -15,6 +16,7 @@ import {
   IFlame,
   IFoot,
   IInfo,
+  ILogout,
   IMoon,
   IRuler,
   IScale,
@@ -89,6 +91,7 @@ export function SettingsView({
   onReset,
   statsVisibility,
   onToggleStat,
+  account,
 }: {
   data: AppData;
   onUpdateGoals: (g: Goals) => void;
@@ -98,6 +101,7 @@ export function SettingsView({
   onReset: () => void;
   statsVisibility: AppData["statsVisibility"];
   onToggleStat: (id: StatsBlockKey) => void;
+  account: { user: SessionUser; providerLabel: string; onLogout: () => void };
 }) {
   const [section, setSection] = useState<Section>("menu");
   const [confirmReset, setConfirmReset] = useState(false);
@@ -186,8 +190,14 @@ export function SettingsView({
       )}
 
       {section === "app" && (
-        <SubScreen onBack={back} title="Приложение" subtitle="Версия, установка и данные">
+        <SubScreen onBack={back} title="Приложение" subtitle="Аккаунт, версия, установка и данные">
           <div className="grid content-start gap-5 lg:grid-cols-2">
+            <AccountCard
+              user={account.user}
+              providerLabel={account.providerLabel}
+              onLogout={account.onLogout}
+            />
+
             {/* приложение */}
             <section className="card p-5 lg:col-span-2">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -377,5 +387,73 @@ function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; la
         }`}
       />
     </button>
+  );
+}
+
+/* ---------- аккаунт ---------- */
+
+function AccountCard({
+  user,
+  providerLabel,
+  onLogout,
+}: {
+  user: SessionUser;
+  providerLabel: string;
+  onLogout: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => {
+    if (!confirm) return;
+    const t = window.setTimeout(() => setConfirm(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [confirm]);
+
+  const syncedAt = accountSyncedAt(user.id);
+  const initial = (user.name?.[0] ?? user.email[0] ?? "?").toUpperCase();
+
+  const doLogout = () => {
+    if (confirm) {
+      setConfirm(false);
+      onLogout();
+    } else setConfirm(true);
+  };
+
+  return (
+    <section className="card p-5">
+      <div className="flex items-center gap-3.5">
+        <span className="grid size-12 shrink-0 place-items-center rounded-full border border-line bg-leafwash font-display text-lg font-extrabold text-leafdeep">
+          {initial}
+        </span>
+        <div className="min-w-0">
+          {user.name && <div className="truncate text-sm font-bold">{user.name}</div>}
+          <div className="truncate text-xs text-soft">{user.email}</div>
+          <div className="mt-0.5 text-[11px] text-faint">
+            Вход через {providerLabel}
+            {syncedAt && (
+              <>
+                {" · синхронизировано в "}
+                {new Date(syncedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-[11px] leading-snug text-faint">
+          Данные сохраняются в вашем аккаунте и подхватятся при следующем входе на этом устройстве.
+        </p>
+        <button
+          onClick={doLogout}
+          className={`btn-press flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold ${
+            confirm
+              ? "bg-danger text-paperink"
+              : "border border-line bg-field text-soft hover:text-danger"
+          }`}
+        >
+          <ILogout width={14} height={14} />
+          {confirm ? "Точно выйти?" : "Выйти"}
+        </button>
+      </div>
+    </section>
   );
 }
