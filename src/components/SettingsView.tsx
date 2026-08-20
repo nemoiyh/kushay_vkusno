@@ -78,7 +78,7 @@ const MENU_ITEMS: {
     icon: <IApple width={20} height={20} />,
     tint: "bg-leafwash text-leafdeep",
     title: "Приложение",
-    desc: "Версия, установка PWA, данные",
+    desc: "Аккаунт, вход и синхронизация",
   },
 ];
 
@@ -190,13 +190,20 @@ export function SettingsView({
       )}
 
       {section === "app" && (
-        <SubScreen onBack={back} title="Приложение" subtitle="Аккаунт, версия, установка и данные">
+        <SubScreen onBack={back} title="Аккаунт" subtitle="Профиль и синхронизация данных">
+          <AccountCard
+            user={account.user}
+            providerLabel={account.providerLabel}
+            onLogout={account.onLogout}
+          />
+        </SubScreen>
+      )}
+
+      {/* нижеследующие блоки («Приложение», «Данные», «О приложении») намеренно скрыты —
+          раздел оставлен только под управление аккаунтом */}
+      {false && (
+        <div className="hidden">
           <div className="grid content-start gap-5 lg:grid-cols-2">
-            <AccountCard
-              user={account.user}
-              providerLabel={account.providerLabel}
-              onLogout={account.onLogout}
-            />
 
             {/* приложение */}
             <section className="card p-5 lg:col-span-2">
@@ -334,7 +341,7 @@ export function SettingsView({
               </ul>
             </section>
           </div>
-        </SubScreen>
+        </div>
       )}
     </div>
   );
