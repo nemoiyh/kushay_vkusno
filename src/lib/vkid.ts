@@ -97,14 +97,12 @@ function randState(): string {
   return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Классический OAuth-адрес авторизации VK ID (code flow). */
+/** Адрес авторизации VK ID (low-code / callback). Только штатные параметры —
+ *  лишние (например дублирующий state) VK может отклонить ошибкой загрузки. */
 export function buildAuthorizeUrl(state: string): string {
   const p = new URLSearchParams({
     app_id: String(APP_ID),
     redirect_uri: REDIRECT_URL,
-    // state дублируем в обоих параметрах — так адрес совместим и с классическим
-    // OAuth, и с low-code/callback-режимом VK ID
-    state,
     redirect_state: state,
     response_mode: "callback",
     scope: "email",
@@ -193,49 +191,24 @@ export function onVkOAuthResult(cb: (data: VkTokenResponse) => void): () => void
 }
 
 /**
- * Открывает авторизацию VK.
- *
- * Сначала пробуем VKID.Auth.openOAuthPopup() — полноценное окно авторизации
- * (SDK сам валидирует redirect и отдаст code+device_id). Вызывать синхронно
- * внутри обработчика клика, иначе браузер заблокирует попап.
- * Если метод недоступен или попап заблокирован — полный redirect в этом окне:
- * после входа VK вернёт нас сюда с ?code=..., и отработает
- * consumeVkOAuthCallback() при загрузке.
- *
- * Возвращает ссылку на попап (для слежения) или null, если начался redirect.
+ * Перехватывает ошибки от ВК. Если ВКонтакте вернул нас с ?error=... (например,
+ * не совпал Redirect URI или вход отменён), чистит URL и возвращает понятный
+ * текст для пользователя. Иначе — null.
  */
-export async function startVkOAuth(onRedirect: () => void): Promise<Window | null> {
-  const state = randState();
-  try {
-    sessionStorage.setItem(STATE_KEY, state);
-  } catch { /* ignore */ }
+export function consumeVkOAuthError(): string | null {
+  const url = new URL(window.location.href);
+  const err = url.searchParams.get("error");
+  const desc = url.searchParams.get("error_description");
+  if (!err && !desc) return null;
 
-  const VKID = await loadSdk();
-  if (VKID) {
-    initConfig(VKID);
-    if (typeof VKID.Auth.openOAuthPopup === "function") {
-      try {
-        VKID.Auth.openOAuthPopup({ state, redirectUrl: REDIRECT_URL });
-        // попап открыт силами SDK — следим за ним снаружи
-        return null;
-      } catch {
-        /* падаем на window.open / redirect ниже */
-      }
-    }
-  }
+  // Чистим адресную строку, чтобы ошибка не «прилипала» при обновлении
+  url.searchParams.delete("error");
+  url.searchParams.delete("error_description");
+  window.history.replaceState(null, "", url.toString());
 
-  // window.open синхронно (в пределах клика) — браузер обычно не блокирует
-  const popup = window.open(
-    buildAuthorizeUrl(state),
-    "kv_oauth",
-    "width=680,height=780,menubar=no,toolbar=no",
-  );
-  if (popup) return popup;
-
-  // попап заблокирован — полный redirect (навигацию браузер не блокирует)
-  onRedirect();
-  window.location.assign(buildAuthorizeUrl(state));
-  return null;
+  if (err === "access_denied") return "Вход через ВКонтакте отменён.";
+  if (desc) return decodeURIComponent(desc.replace(/\+/g, " "));
+  return "Разрешите всплывающие окна для этого сайта и попробуйте ещё раз.";
 }
 
 /**
