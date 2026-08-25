@@ -11,7 +11,7 @@ import {
   PROVIDER_LABEL, loadAccountData, restoreSession, saveAccountData, signOut, type SessionUser,
 } from "./lib/auth";
 import {
-  clearVkSession, consumeVkOAuthCallback, getVkProfile, hasVkSession, saveVkSession,
+  clearVkSession, consumeVkOAuthCallback, consumeVkOAuthError, getVkProfile, hasVkSession, saveVkSession,
 } from "./lib/vkid";
 import { cloudLoadData, cloudSaveData } from "./lib/supabase";
 import { ErrorBoundary, ToastStack } from "./components/ui";
@@ -40,10 +40,14 @@ export default function App() {
   /* ------- аккаунт: сессия, «облако», выход ------- */
   const [user, setUser] = useState<SessionUser | null>(null);
   const [booting, setBooting] = useState(true);
+  const [vkBootError, setVkBootError] = useState<string | null>(null);
 
   // при старте: обрабатываем возврат из VK OAuth, затем проверяем сессию
   useEffect(() => {
     let cancelled = false;
+    // если ВК вернул ошибку (Redirect URI не совпал, вход отменён и т.п.) —
+    // показываем понятное сообщение вместо белого экрана
+    setVkBootError(consumeVkOAuthError());
     (async () => {
       // 0) возврат из VK (в URL есть code) — обмениваем и входим
       const vkData = await consumeVkOAuthCallback();
@@ -284,7 +288,7 @@ export default function App() {
   /* ------- рендер ------- */
 
   if (booting) return <Splash />;
-  if (!user) return <AuthScreen localData={data} onDone={handleLoginSuccess} />;
+  if (!user) return <AuthScreen localData={data} onDone={handleLoginSuccess} vkError={vkBootError} />;
 
   return (
     <div className="min-h-dvh">

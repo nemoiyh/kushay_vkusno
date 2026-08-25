@@ -36,9 +36,12 @@ type Mode = "landing" | "login" | "register" | "forgot";
 export function AuthScreen({
   localData,
   onDone,
+  vkError = null,
 }: {
   localData: AppData;
   onDone: (user: SessionUser, data?: AppData) => void;
+  /** ошибка, с которой ВК вернул нас на сайт при загрузке */
+  vkError?: string | null;
 }) {
   const [mode, setMode] = useState<Mode>("landing");
   const [merge, setMerge] = useState<{ user: SessionUser; cloud: { data: AppData; syncedAt: number } | null } | null>(null);
@@ -140,6 +143,7 @@ export function AuthScreen({
                 onLogin={() => setMode("login")}
                 onRegister={() => setMode("register")}
                 onVkLogin={handleVkLogin}
+                bootError={vkError}
               />
             ) : mode === "login" ? (
               <LoginForm onBack={() => setMode("landing")} onForgot={() => setMode("forgot")} onSwitch={() => setMode("register")} onSuccess={finish} />
@@ -233,13 +237,16 @@ function Landing({
   onLogin,
   onRegister,
   onVkLogin,
+  bootError = null,
 }: {
   onLogin: () => void;
   onRegister: () => void;
   onVkLogin: (data: VkTokenResponse) => void;
+  /** ошибка, с которой ВК вернул нас на сайт (не совпал Redirect URI и т.п.) */
+  bootError?: string | null;
 }) {
   const [navigating, setNavigating] = useState(false);
-  const [vkError, setVkError] = useState<string | null>(null);
+  const [vkError, setVkError] = useState<string | null>(bootError);
   const onVkLoginRef = useRef(onVkLogin);
   onVkLoginRef.current = onVkLogin;
   // адрес входа ВКонтакте — обычная ссылка, генерируется один раз при монтировании
@@ -297,6 +304,12 @@ function Landing({
       {!navigating && !vkError && (
         <p className="mt-2 text-center text-[11px] text-faint">
           Перейдёте на страницу ВКонтакте, а после входа вернётесь сюда
+        </p>
+      )}
+      {!navigating && (
+        <p className="mt-1.5 text-center text-[10px] leading-relaxed text-faint/80">
+          Если ВКонтакте показывает «Ошибка загрузки» — в настройках приложения на
+          dev.vk.com в «Доверенных Redirect URI» должен быть точно указан адрес этого сайта.
         </p>
       )}
 
