@@ -1,7 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { AppData, Goals, Profile, StatsBlockKey } from "../types";
-import { FOODS } from "../data/foods";
-import { fmt } from "../lib/store";
 import { accountSyncedAt, type SessionUser } from "../lib/auth";
 import { GoalsView } from "./GoalsView";
 import {
@@ -294,7 +292,7 @@ export function SettingsView({
             <section className="card p-5">
               <h2 className="font-display text-[13px] font-bold">Данные</h2>
               <p className="mt-1 text-xs leading-relaxed text-soft">
-                Всё хранится локально в вашем браузере (localStorage) и никуда не отправляется.
+                Данные хранятся в облаке и синхронизируются между устройствами.
               </p>
               <div className="mt-4 flex flex-wrap gap-2.5">
                 <button
@@ -317,7 +315,7 @@ export function SettingsView({
               </div>
               {confirmReset && (
                 <p className="mt-2 text-[11px] font-medium text-danger">
-                  Будут удалены дневник, цели, вес и демо-данные. Через 4 секунды отмена.
+                  Будут удалены дневник, цели, вес и настройки. Через 4 секунды отмена.
                 </p>
               )}
             </section>
@@ -326,10 +324,6 @@ export function SettingsView({
             <section className="card p-5">
               <h2 className="font-display text-[13px] font-bold">О приложении</h2>
               <ul className="mt-3 space-y-2.5 text-sm">
-                <li className="flex items-center gap-2.5 text-soft">
-                  <IInfo width={15} height={15} className="shrink-0 text-leaf" />
-                  База — {fmt(FOODS.length)} продуктов, включая каталог «Перекрёстка»
-                </li>
                 <li className="flex items-center gap-2.5 text-soft">
                   <IInfo width={15} height={15} className="shrink-0 text-leaf" />
                   Штрихкоды: ваша база → Open Food Facts → свои товары
