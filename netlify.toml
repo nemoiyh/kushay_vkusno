@@ -1,0 +1,23 @@
+# Конфигурация деплоя «Кушай вкусно» на Netlify
+# Сборка: npm run build, публикация папки dist.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA: любой адрес отдаёт index.html (навигация внутри приложения)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Service worker и манифест не кэшируем — обновления подхватываются сразу
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
