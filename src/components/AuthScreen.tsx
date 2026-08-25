@@ -1,7 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData } from "../types";
 import type { SessionUser } from "../lib/auth";
-import { startVkOAuth, saveVkSession, type VkTokenResponse } from "../lib/vkid";
+import {
+  onVkOAuthResult,
+  preloadVkSdk,
+  startVkOAuth,
+  saveVkSession,
+  type VkTokenResponse,
+} from "../lib/vkid";
 import {
   AuthError,
   isValidEmail,
@@ -249,47 +255,91 @@ function Landing({
   onRegister: () => void;
   onVkLogin: (data: VkTokenResponse) => void;
 }) {
-  const [vkBusy, setVkBusy] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "popup" | "redirect">("idle");
   const [vkError, setVkError] = useState<string | null>(null);
+  const popupRef = useRef<Window | null>(null);
+  const doneRef = useRef(false);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const onVkLoginRef = useRef(onVkLogin);
+  onVkLoginRef.current = onVkLogin;
 
-  /** Вход через ВКонтакте: открываем полноценное окно авторизации VK ID */
-  const handleVk = () => {
-    setVkBusy(true);
-    setVkError(null);
-    startVkOAuth(
-      (data) => {
-        setVkBusy(false);
-        onVkLogin(data);
-      },
-      (err) => {
-        setVkBusy(false);
+  // предзагружаем SDK и подписываемся на результат из попапа
+  useEffect(() => {
+    preloadVkSdk();
+    const unsub = onVkOAuthResult((data) => {
+      doneRef.current = true;
+      onVkLoginRef.current(data);
+    });
+    return unsub;
+  }, []);
+
+  // следим за попапом: таймаут 10 с и факт закрытия окна
+  useEffect(() => {
+    if (phase !== "popup") return;
+    const timeout = window.setTimeout(() => {
+      if (!doneRef.current && phaseRef.current === "popup") {
         setVkError(
-          err instanceof Error ? err.message : "Не удалось войти через ВКонтакте. Попробуйте ещё раз.",
+          "Не удалось соединиться с ВК. Попробуйте отключить блокировщик рекламы или войдите по Email.",
         );
-      },
-    );
+        setPhase("idle");
+      }
+    }, 10000);
+    const poll = window.setInterval(() => {
+      const p = popupRef.current;
+      if (p && !p.closed) return;
+      window.clearInterval(poll);
+      // даём postMessage долететь; если вход так и не случился — сообщаем
+      window.setTimeout(() => {
+        if (!doneRef.current && phaseRef.current === "popup") {
+          setVkError("Окно входа ВКонтакте было закрыто. Попробуйте ещё раз.");
+          setPhase("idle");
+        }
+      }, 700);
+    }, 400);
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearInterval(poll);
+    };
+  }, [phase]);
+
+  /** Вход через ВКонтакте: окно авторизации открывается синхронно по клику */
+  const handleVk = () => {
+    setVkError(null);
+    doneRef.current = false;
+    const popup = startVkOAuth(() => setPhase("redirect"));
+    popupRef.current = popup;
+    setPhase(popup ? "popup" : "redirect");
   };
+
+  const busy = phase !== "idle";
+  const caption =
+    phase === "redirect"
+      ? "Перенаправляем в ВКонтакте…"
+      : phase === "popup"
+        ? "Открываем ВКонтакте…"
+        : "Войти через ВКонтакте";
 
   return (
     <div className="anim-in">
       <h2 className="font-display text-lg font-extrabold">Добро пожаловать</h2>
       <p className="mt-1 text-[13px] text-soft">Войдите, чтобы начать вести дневник</p>
 
-      {/* Главный способ — полноценное окно авторизации ВКонтакте */}
+      {/* Главный способ — окно авторизации ВКонтакте */}
       <button
         onClick={handleVk}
-        disabled={vkBusy}
+        disabled={busy}
         className="btn-press mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#07f] px-4 py-3.5 text-sm font-bold text-white shadow-[0_4px_0_rgba(0,60,160,0.35)] transition-transform hover:brightness-110 disabled:opacity-60"
       >
-        {vkBusy ? (
+        {busy ? (
           <span className="spinner" style={{ borderTopColor: "#fff" }} />
         ) : (
           <IVk width={20} height={20} />
         )}
-        {vkBusy ? "Открываем ВКонтакте…" : "Войти через ВКонтакте"}
+        {caption}
       </button>
       {vkError && (
-        <p className="anim-in mt-2.5 rounded-xl border border-danger/35 bg-dangerwash px-3 py-2 text-xs font-semibold text-danger">
+        <p className="anim-in mt-2.5 rounded-xl border border-danger/35 bg-dangerwash px-3 py-2 text-xs font-semibold leading-relaxed text-danger">
           {vkError}
         </p>
       )}
@@ -333,12 +383,12 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-bold text-soft">{label}</span>
+      <span className="mb-1.5 block text-xs font-bold text-soft">{label}</span>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint">{icon}</span>
         {children}
       </div>
-      {error && <span className="mt-1 block text-[11px] font-medium text-danger">{error}</span>}
+      {error && <span className="mt-1.5 block text-[11px] font-medium leading-snug text-danger">{error}</span>}
     </label>
   );
 }
@@ -461,7 +511,7 @@ function LoginForm({
   return (
     <div className="anim-in">
       <BackRow onBack={onBack} title="Вход" />
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col space-y-4">
         {error && <ErrorBanner text={error} />}
         <Field label="Email или никнейм" icon={<IMail width={15} height={15} />}>
           <input
@@ -553,7 +603,7 @@ function RegisterForm({
   return (
     <div className="anim-in">
       <BackRow onBack={onBack} title="Регистрация" />
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col space-y-4">
         {error && <ErrorBanner text={error} />}
         <Field label="Никнейм (для входа по нику)" icon={<IUserIcon width={15} height={15} />} error={fieldErr.nickname}>
           <input
@@ -575,15 +625,18 @@ function RegisterForm({
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <Field label="Пароль (мин. 8 символов)" icon={<ILock width={15} height={15} />} error={fieldErr.password}>
-          <PasswordInput
-            value={password}
-            onChange={setPassword}
-            invalid={!!fieldErr.password}
-            autoComplete="new-password"
-          />
+        <div>
+          <Field label="Пароль (мин. 8 символов)" icon={<ILock width={15} height={15} />} error={fieldErr.password}>
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              invalid={!!fieldErr.password}
+              autoComplete="new-password"
+            />
+          </Field>
+          {/* индикатор сложности — вне <label> поля, чтобы не ломать его высоту */}
           <StrengthBar password={password} />
-        </Field>
+        </div>
         <Field label="Повторите пароль" icon={<ILock width={15} height={15} />} error={fieldErr.confirm}>
           <PasswordInput value={confirm} onChange={setConfirm} invalid={!!fieldErr.confirm} autoComplete="new-password" />
         </Field>
