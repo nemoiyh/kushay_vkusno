@@ -4,6 +4,9 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Относительный базовый путь: сборка работает в ЛЮБОЙ подпапке хостинга —
+  // https://ник.github.io/любое_имя_репо/, Netlify, локальный просмотр dist.
+  base: "./",
   server: {
     host: "0.0.0.0",
     port: 3000,
