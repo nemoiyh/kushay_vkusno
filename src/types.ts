@@ -55,6 +55,8 @@ export interface Profile {
   height: number;
   weight: number;
   activity: number;
+  /** целевой вес — рисует пунктирную линию на графике (если задан) */
+  targetWeight?: number;
 }
 
 export interface WeightEntry {

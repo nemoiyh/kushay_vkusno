@@ -87,6 +87,10 @@ export async function getOffProductByBarcode(code: string): Promise<OffProduct |
   }
 }
 
+/** Алиасы для совместимости со старым модулем lib/off.ts */
+export const getProductByBarcode = getOffProductByBarcode;
+export const toFood = (p: OffProduct): Food => offToFood(p);
+
 /** Приведение товара OFF к локальному формату Food. */
 export function offToFood(p: OffProduct): Food {
   return {

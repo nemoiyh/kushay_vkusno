@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { ActivityEntry, AppData, MeasureEntry, MeasureKey, SleepEntry } from "../types";
 import { MEASURE_KEYS, WD, dayTotals, fmt, ru1, shiftKey, streakDays, todayKey } from "../lib/store";
 import { MacroBar } from "./ui";
@@ -88,7 +88,7 @@ export function StatsView({
         </div>
       ) : (
         <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {visibility.weight && <WeightZone weights={weights} onWeight={onWeight} />}
+          {visibility.weight && <WeightZone weights={weights} targetWeight={data.profile.targetWeight} onWeight={onWeight} />}
           {visibility.measures && <MeasuresZone measures={data.measures} onSave={onMeasures} />}
           {visibility.calories && (
             <Card icon={<IFlame width={16} height={16} />} tint="bg-carrotwash text-carrot" title="Калории по дням"
@@ -123,9 +123,9 @@ export function StatsView({
 }
 
 /* ---------- каркас карточки ---------- */
-function Card({ icon, tint, title, right, children }: { icon: ReactNode; tint: string; title: string; right?: ReactNode; children: ReactNode }) {
+function Card({ icon, tint, title, right, children, style }: { icon: ReactNode; tint: string; title: string; right?: ReactNode; children: ReactNode; style?: CSSProperties }) {
   return (
-    <section className="card p-5">
+    <section className="card p-5" style={style}>
       <div className="flex items-center gap-2.5">
         <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${tint}`}>{icon}</span>
         <h2 className="font-display text-[13px] font-bold">{title}</h2>
@@ -201,18 +201,89 @@ function CaloriesChart({ keys, vals, goal, showWeekdays }: { keys: string[]; val
 }
 
 /* ---------- вес ---------- */
-function WeightZone({ weights, onWeight }: { weights: { date: string; value: number }[]; onWeight: (v: number) => void }) {
+/* Скользящее среднее (окно w) — сглаживает ежедневные колебания веса. */
+function movingAvg(vals: number[], w: number): number[] {
+  const half = Math.floor(w / 2);
+  return vals.map((_, i) => {
+    let sum = 0;
+    let cnt = 0;
+    for (let j = Math.max(0, i - half); j <= Math.min(vals.length - 1, i + half); j++) {
+      sum += vals[j];
+      cnt++;
+    }
+    return sum / cnt;
+  });
+}
+
+/* Catmull-Rom → кубический Безье: плавная кривая через точки. */
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (!pts.length) return "";
+  if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`;
+  const r = (n: number) => Math.round(n * 10) / 10;
+  let d = `M${r(pts[0].x)},${r(pts[0].y)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${r(c1x)},${r(c1y)} ${r(c2x)},${r(c2y)} ${r(p2.x)},${r(p2.y)}`;
+  }
+  return d;
+}
+
+const WEIGHT_BRAND = "#2A9D8F"; // бирюза из брендбука
+const W_VB = 340; // ширина viewBox
+const W_LEFT = 18;
+const W_RIGHT = 322;
+const W_TOP = 30;
+const W_BASE = 122; // нижняя ось
+
+function WeightZone({ weights, targetWeight, onWeight }: { weights: { date: string; value: number }[]; targetWeight?: number; onWeight: (v: number) => void }) {
   const [input, setInput] = useState("");
   const [err, setErr] = useState("");
+  const [smooth, setSmooth] = useState(true);
+
   const last = weights[weights.length - 1];
   const prev = weights[weights.length - 2];
   const delta = last && prev ? Math.round((last.value - prev.value) * 10) / 10 : null;
-  const min = weights.length ? Math.min(...weights.map((w) => w.value)) : 0;
-  const max = weights.length ? Math.max(...weights.map((w) => w.value)) : 1;
-  const span = max - min || 1;
-  const PAD = 14;
-  const yPct = (v: number) => PAD + (1 - (v - min) / span) * (100 - PAD * 2);
-  const pts = weights.map((w, i) => ({ x: weights.length > 1 ? 2.5 + (i / (weights.length - 1)) * 95 : 50, y: yPct(w.value) }));
+
+  const raw = weights.map((w) => w.value);
+  const n = raw.length;
+
+  // Динамическая ось Y: размах данных ± 1 кг — маленькие колебания не «взрывают» график.
+  const dataMin = n ? Math.min(...raw) : 0;
+  const dataMax = n ? Math.max(...raw) : 1;
+  const yMin = dataMin - 1;
+  const yMax = dataMax + 1;
+  const ySpan = yMax - yMin || 1;
+
+  const xFor = (i: number) => (n > 1 ? W_LEFT + (i / (n - 1)) * (W_RIGHT - W_LEFT) : (W_LEFT + W_RIGHT) / 2);
+  const yFor = (v: number) => W_TOP + (1 - (v - yMin) / ySpan) * (W_BASE - W_TOP);
+
+  const rawPts = raw.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
+  const displayVals = smooth && n >= 3 ? movingAvg(raw, 3) : raw;
+  const displayPts = displayVals.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
+
+  const curve = smoothPath(displayPts);
+  const area = n >= 2 ? `${curve} L${Math.round(rawPts[n - 1].x)},${W_BASE} L${Math.round(rawPts[0].x)},${W_BASE} Z` : "";
+
+  // Ключевые точки для подписей: первая, последняя, минимум, максимум.
+  const keyIdx = useMemo(() => {
+    if (!n) return new Set<number>();
+    let minI = 0;
+    let maxI = 0;
+    raw.forEach((v, i) => {
+      if (v < raw[minI]) minI = i;
+      if (v > raw[maxI]) maxI = i;
+    });
+    return new Set([0, n - 1, minI, maxI]);
+  }, [raw, n]);
+
+  const targetY = targetWeight !== undefined && targetWeight >= yMin && targetWeight <= yMax ? yFor(targetWeight) : null;
 
   const save = () => {
     const v = parseFloat(input.replace(",", "."));
@@ -223,7 +294,11 @@ function WeightZone({ weights, onWeight }: { weights: { date: string; value: num
   };
 
   return (
-    <Card icon={<IScale width={16} height={16} />} tint="bg-leafwash text-leafdeep" title="Вес"
+    <Card
+      icon={<IScale width={16} height={16} />}
+      tint="bg-leafwash text-leafdeep"
+      title="Вес"
+      style={{ background: "#ffffff", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
       right={last ? (
         <span className="flex items-center gap-1.5">
           <b className="font-display text-base tabular-nums">{ru1(last.value)} кг</b>
@@ -234,22 +309,82 @@ function WeightZone({ weights, onWeight }: { weights: { date: string; value: num
             </span>
           )}
         </span>
-      ) : null}>
-      {weights.length >= 2 ? (
-        <svg viewBox="0 0 100 40" className="mt-4 h-20 w-full" preserveAspectRatio="none" aria-hidden>
-          <polyline
-            points={pts.map((p) => `${p.x},${p.y * 0.4}`).join(" ")}
-            fill="none"
-            stroke="var(--color-leaf)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-          {pts.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y * 0.4} r="2" fill="var(--color-card)" stroke="var(--color-leaf)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-          ))}
-        </svg>
+      ) : null}
+    >
+      {n >= 2 ? (
+        <>
+          {/* адаптивный SVG: масштабируется от 320px, текст не искажается */}
+          <svg viewBox={`0 0 ${W_VB} 160`} className="mt-4 w-full" role="img" aria-label="График веса">
+            <defs>
+              <linearGradient id="weight-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={WEIGHT_BRAND} stopOpacity="0.32" />
+                <stop offset="100%" stopColor={WEIGHT_BRAND} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+
+            {/* лёгкие горизонтальные направляющие */}
+            {[0.25, 0.5, 0.75].map((f) => (
+              <line key={f} x1={W_LEFT} x2={W_RIGHT} y1={W_TOP + f * (W_BASE - W_TOP)} y2={W_TOP + f * (W_BASE - W_TOP)} stroke="rgba(38,70,83,0.07)" strokeWidth="1" />
+            ))}
+
+            {/* пунктирная линия целевого веса */}
+            {targetY !== null && (
+              <g>
+                <line x1={W_LEFT} x2={W_RIGHT} y1={targetY} y2={targetY} stroke="#264653" strokeOpacity="0.45" strokeWidth="1.5" strokeDasharray="5 5" />
+                <text x={W_RIGHT} y={targetY - 5} textAnchor="end" fontSize="10" fontWeight="700" fill="#264653" fillOpacity="0.6">
+                  цель {ru1(targetWeight!)}
+                </text>
+              </g>
+            )}
+
+            {/* ось */}
+            <line x1={W_LEFT} x2={W_RIGHT} y1={W_BASE} y2={W_BASE} stroke="rgba(38,70,83,0.18)" strokeWidth="1.5" />
+
+            {/* заполнение под кривой (градиент бирюза → прозрачный) */}
+            {area && <path d={area} fill="url(#weight-fill)" />}
+
+            {/* плавная кривая */}
+            <path d={curve} fill="none" stroke={WEIGHT_BRAND} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+            {/* точки замеров (крупные, на фактических значениях) */}
+            {rawPts.map((p, i) => (
+              <circle key={i} cx={p.x} cy={p.y} r="4.5" fill="#ffffff" stroke={WEIGHT_BRAND} strokeWidth="2.5" />
+            ))}
+
+            {/* подписи только на ключевых точках */}
+            {rawPts.map((p, i) => {
+              if (!keyIdx.has(i)) return null;
+              const above = p.y > W_TOP + 22;
+              const x = Math.min(W_RIGHT - 4, Math.max(26, p.x));
+              return (
+                <text
+                  key={`lbl-${i}`}
+                  x={x}
+                  y={above ? p.y - 11 : p.y + 20}
+                  textAnchor="middle"
+                  fontSize="12"
+                  fontWeight="700"
+                  fill="#264653"
+                >
+                  {ru1(raw[i])}
+                </text>
+              );
+            })}
+          </svg>
+
+          {/* переключатель сглаживания */}
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-[11px] text-faint">Сглаживание убирает шум ежедневных взвешиваний</p>
+            <button
+              onClick={() => setSmooth((s) => !s)}
+              role="switch"
+              aria-checked={smooth}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${smooth ? "bg-[#2A9D8F]" : "bg-line"}`}
+            >
+              <span className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${smooth ? "translate-x-5" : ""}`} />
+            </button>
+          </div>
+        </>
       ) : (
         <p className="mt-4 rounded-xl bg-paper px-3 py-4 text-center text-xs text-faint">Замеров пока нет — введите вес ниже</p>
       )}

@@ -1,6 +1,6 @@
 /* «Кушай вкусно» — service worker: офлайн-режим и кэш оболочки */
 const CACHE = "kushai-vkusno-v3";
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon.svg"];
+const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icons/logo.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
