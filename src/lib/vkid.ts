@@ -1,24 +1,14 @@
 /**
  * Интеграция VK ID (low-code).
  *
- * Авторизация полностью делегирована VK ID — Supabase здесь НЕ используется.
- * Flow — классический OAuth 2.1 code flow без зависимости от «капризных»
- * внутренних методов SDK:
+ * Авторизация делегирована VK ID. После успеха обмениваем authorization code на
+ * токены через VKID.Auth.exchangeCode и храним их в localStorage
+ * (vk_token / user_profile).
  *
- * 1. По клику на «Войти через ВКонтакте» происходит полный редирект
- *    на https://id.vk.com/authorize.
- * 2. После входа VK возвращает нас на redirectUrl с ?code=…&device_id=…
- * 3. consumeVkOAuthCallback() при загрузке приложения чистит URL, обменивает
- *    код на токены через VKID.Auth.exchangeCode и сохраняет их в localStorage
- *    (vk_token / user_profile).
- *
- * redirectUrl по умолчанию — адрес, по которому открыто приложение
- * (origin + path), поэтому вход работает и на GitHub Pages, и на Netlify без
- * пересборки. ВАЖНО: адрес должен быть добавлен в «Доверенные Redirect URI»
- * приложения на dev.vk.com.
+ * ВАЖНО: redirectUrl зафиксирован побайтово и должен совпадать с «Доверенными
+ * Redirect URI» приложения на dev.vk.com — иначе VK вернёт «Ошибка загрузки».
  */
 
-/* Типизация минимального API VK ID SDK */
 declare global {
   interface Window {
     VKIDSDK?: VkSdk;
@@ -33,6 +23,7 @@ interface VkSdk {
   ConfigSource: { LOWCODE: string; [k: string]: string };
   Auth: {
     exchangeCode: (code: string, deviceId: string) => Promise<VkTokenResponse>;
+    openOAuthPopup?: (opts?: { state?: string; redirectUrl?: string }) => unknown;
   };
 }
 
@@ -59,12 +50,12 @@ const SDK_URL = "https://unpkg.com/@vkid/sdk@2.1.0/dist-sdk/umd/index.js";
 export const APP_ID = 54728657;
 
 /**
- * redirectUrl для VK ID: переменная окружения VITE_VK_REDIRECT_URL или
- * фактический адрес приложения (origin + path).
+ * redirectUrl — ТОЧНО как в «Доверенных Redirect URI» на dev.vk.com
+ * (со слэшем на конце). Можно переопределить через VITE_VK_REDIRECT_URL.
  */
 const REDIRECT_URL =
   (import.meta.env.VITE_VK_REDIRECT_URL as string | undefined) ??
-  (typeof window !== "undefined" ? window.location.origin + window.location.pathname : "");
+  "https://nemoiyh.github.io/kushay_vkusno/";
 
 const TOKEN_KEY = "vk_token";
 const PROFILE_KEY = "user_profile";
@@ -72,28 +63,20 @@ const STATE_KEY = "vk_oauth_state";
 
 let sdkPromise: Promise<VkSdk | null> | null = null;
 
-/** Подгружаем SDK один раз и кэшируем промис (с жёстким таймаутом). */
-function loadSdk(timeoutMs = 8000): Promise<VkSdk | null> {
+/** Подгружаем SDK один раз и кэшируем промис. */
+function loadSdk(): Promise<VkSdk | null> {
   if (sdkPromise) return sdkPromise;
   sdkPromise = new Promise((resolve) => {
     if (window.VKIDSDK) {
       resolve(window.VKIDSDK);
       return;
     }
-    let done = false;
-    const finish = (sdk: VkSdk | null) => {
-      if (!done) {
-        done = true;
-        resolve(sdk);
-      }
-    };
     const s = document.createElement("script");
     s.src = SDK_URL;
     s.async = true;
-    s.onload = () => finish(window.VKIDSDK ?? null);
-    s.onerror = () => finish(null);
+    s.onload = () => resolve(window.VKIDSDK ?? null);
+    s.onerror = () => resolve(null);
     document.head.appendChild(s);
-    window.setTimeout(() => finish(window.VKIDSDK ?? null), timeoutMs);
   });
   return sdkPromise;
 }
@@ -117,10 +100,10 @@ function randState(): string {
 /** Классический OAuth-адрес авторизации VK ID (code flow). */
 export function buildAuthorizeUrl(state: string): string {
   const p = new URLSearchParams({
-    client_id: String(APP_ID),
+    app_id: String(APP_ID),
     redirect_uri: REDIRECT_URL,
-    response_type: "code",
-    state,
+    redirect_state: state,
+    response_mode: "callback",
     scope: "email",
   });
   return `https://id.vk.com/authorize?${p.toString()}`;
@@ -172,15 +155,11 @@ export function clearVkSession(): void {
   }
 }
 
-/** Есть ли активная сессия VK ID. */
 export const hasVkSession = (): boolean => Boolean(getVkToken() && getVkProfile());
 
 /* ---------- вход через окно авторизации ---------- */
 
-/**
- * Предзагрузка SDK в фоне (вызывать при монтировании экрана входа) —
- * к моменту обмена code→токены скрипт уже будет готов.
- */
+/** Предзагрузка SDK в фоне — к моменту обмена code→токены скрипт уже готов. */
 export function preloadVkSdk(): void {
   void loadSdk();
 }
@@ -196,52 +175,62 @@ export function onVkOAuthResult(cb: (data: VkTokenResponse) => void): () => void
 }
 
 /**
- * Открывает авторизацию VK через полный редирект.
- * Возвращает null, так как используется только redirect-флоу.
+ * Открывает авторизацию VK.
+ *
+ * Сначала пробуем VKID.Auth.openOAuthPopup() — полноценное окно авторизации
+ * (SDK сам валидирует redirect и отдаст code+device_id). Вызывать синхронно
+ * внутри обработчика клика, иначе браузер заблокирует попап.
+ * Если метод недоступен или попап заблокирован — полный redirect в этом окне:
+ * после входа VK вернёт нас сюда с ?code=..., и отработает
+ * consumeVkOAuthCallback() при загрузке.
+ *
+ * Возвращает ссылку на попап (для слежения) или null, если начался redirect.
  */
-export function startVkOAuth(_onRedirect: () => void): null {
+export async function startVkOAuth(onRedirect: () => void): Promise<Window | null> {
   const state = randState();
   try {
     sessionStorage.setItem(STATE_KEY, state);
   } catch { /* ignore */ }
 
-  const url = buildAuthorizeUrl(state);
-  window.location.assign(url);
-  return null;
-}
-
-/* ---------- обработка возврата из VK ---------- */
-
-/** Сообщение об ошибке при неудачном обмене кода (показывается на странице). */
-function showAuthError(message: string) {
-  try {
-    document.body.style.cssText =
-      "margin:0;font-family:system-ui,sans-serif;background:#e9f0f0;color:#13262b";
-    document.body.innerHTML =
-      `<div style="display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center">` +
-      `<div><p style="font-weight:800;font-size:17px;margin:0 0 8px">Не удалось войти через ВКонтакте</p>` +
-      `<p style="color:#57675a;font-size:14px;margin:0 0 12px">${message}</p>` +
-      `<p style="color:#8a978b;font-size:13px;margin:0">Перенаправляем на главную…</p></div></div>`;
-    window.setTimeout(() => {
-      window.location.href = window.location.pathname;
-    }, 2600);
-  } catch {
-    window.location.href = window.location.pathname;
+  const VKID = await loadSdk();
+  if (VKID) {
+    initConfig(VKID);
+    if (typeof VKID.Auth.openOAuthPopup === "function") {
+      try {
+        VKID.Auth.openOAuthPopup({ state, redirectUrl: REDIRECT_URL });
+        // попап открыт силами SDK — следим за ним снаружи
+        return null;
+      } catch {
+        /* падаем на window.open / redirect ниже */
+      }
+    }
   }
+
+  // window.open синхронно (в пределах клика) — браузер обычно не блокирует
+  const popup = window.open(
+    buildAuthorizeUrl(state),
+    "kv_oauth",
+    "width=680,height=780,menubar=no,toolbar=no",
+  );
+  if (popup) return popup;
+
+  // попап заблокирован — полный redirect (навигацию браузер не блокирует)
+  onRedirect();
+  window.location.assign(buildAuthorizeUrl(state));
+  return null;
 }
 
 /**
  * Вызывается при старте приложения. Если в URL есть code + device_id (возврат
- * из VK), сразу чистит адресную строку (чтобы повторный вход не срабатывал при
- * обновлении страницы) и обменивает код на токены.
- *
- * При полном редиректе — возвращает данные для входа в этом окне.
+ * из VK), обменивает их на токены. В попапе — отдаёт результат основному окну
+ * и закрывается; при полном редиректе — возвращает данные для входа здесь.
  */
 export async function consumeVkOAuthCallback(): Promise<VkTokenResponse | null> {
   const url = new URL(window.location.href);
   const code = url.searchParams.get("code");
   const deviceId = url.searchParams.get("device_id");
-  const state = url.searchParams.get("state") ?? url.searchParams.get("redirect_state");
+  const state =
+    url.searchParams.get("state") ?? url.searchParams.get("redirect_state");
   if (!code) return null;
 
   let expected: string | null = null;
@@ -249,30 +238,34 @@ export async function consumeVkOAuthCallback(): Promise<VkTokenResponse | null> 
     expected = sessionStorage.getItem(STATE_KEY);
   } catch { /* ignore */ }
 
-  // Сразу убираем ?code=… из адресной строки
-  for (const k of ["code", "device_id", "state", "redirect_state"]) url.searchParams.delete(k);
-  window.history.replaceState(null, "", url.pathname + (url.searchParams.size ? `?${url.searchParams}` : "") + url.hash);
+  // Чистим URL, чтобы параметры не мешали приложению и не срабатывали повторно
+  url.searchParams.delete("code");
+  url.searchParams.delete("device_id");
+  url.searchParams.delete("state");
+  url.searchParams.delete("redirect_state");
+  window.history.replaceState(null, "", url.toString());
 
-  // Если state не совпадает — это не наш флоу, игнорируем
   if (expected && state && state !== expected) return null;
 
   const VKID = await loadSdk();
-  if (!VKID) {
-    showAuthError("Не удалось загрузить VK ID SDK. Проверьте соединение с интернетом.");
-    return null;
-  }
+  if (!VKID || !deviceId) return null;
   initConfig(VKID);
 
   try {
-    const data = await VKID.Auth.exchangeCode(code, deviceId ?? "");
+    const data = await VKID.Auth.exchangeCode(code, deviceId);
     try {
       sessionStorage.removeItem(STATE_KEY);
     } catch { /* ignore */ }
 
+    // Мы в попапе — отдаём токены основному окну и закрываемся
+    if (window.opener) {
+      window.opener.postMessage({ __kvVk: data }, "*");
+      window.close();
+      return null;
+    }
     // Полный редирект — входим прямо в этом окне
     return data;
   } catch {
-    showAuthError("Код авторизации устарел или неверен. Попробуйте войти ещё раз.");
     return null;
   }
 }

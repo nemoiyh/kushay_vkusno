@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import type { AppData, Goals, Profile, Sex } from "../types";
 import { fmt } from "../lib/store";
+import { IAlert } from "./Icons";
 
 const ACTIVITIES = [
   { v: 1.2, label: "Минимум движения" },
-  { v: 1.375, label: "Лёгкая активность, 1–3 тренировки" },
-  { v: 1.55, label: "Средняя, 3–5 тренировок" },
-  { v: 1.725, label: "Высокая, 6–7 тренировок" },
+  { v: 1.375, label: "1–3 тренировки в неделю" },
+  { v: 1.55, label: "3–5 тренировок в неделю" },
+  { v: 1.725, label: "6–7 тренировок в неделю" },
+  { v: 1.9, label: "Тяжёлый физический труд" },
 ];
 
 export function GoalsView({
@@ -20,162 +22,151 @@ export function GoalsView({
 }) {
   const { goals, profile } = data;
 
-
-
-  const setGoal = (patch: Partial<Goals>) => onUpdateGoals({ ...goals, ...patch });
-  const setProf = (patch: Partial<Profile>) => onUpdateProfile({ ...profile, ...patch });
-
-  const applySplit = (kcal: number) =>
+  /** расчёт БЖУ под калории: 30/30/40 */
+  const applySplit = (kcal: number) => {
+    const k = Math.round(kcal);
     onUpdateGoals({
-      kcal: Math.round(kcal / 10) * 10,
-      p: Math.round((kcal * 0.3) / 4),
-      f: Math.round((kcal * 0.3) / 9),
-      c: Math.round((kcal * 0.4) / 4),
+      kcal: k,
+      p: Math.round((k * 0.3) / 4),
+      f: Math.round((k * 0.3) / 9),
+      c: Math.round((k * 0.4) / 4),
     });
+  };
 
-  const tdee = useMemo(() => {
-    const bmr =
-      10 * profile.weight + 6.25 * profile.height - 5 * profile.age + (profile.sex === "male" ? 5 : -161);
-    return Math.round(bmr * profile.activity);
+  const bmr = useMemo(() => {
+    const base = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age;
+    return profile.sex === "male" ? base + 5 : base - 161;
   }, [profile]);
+  const tdee = Math.round(bmr * profile.activity);
 
   return (
     <div className="anim-in">
       <div className="grid gap-5 lg:grid-cols-2">
         {/* дневная цель */}
         <section className="card p-5">
-          <h2 className="font-display text-[13px] font-bold">Дневная цель</h2>
-
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-sm font-semibold text-soft">Калории</span>
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-display text-[13px] font-bold">Дневная цель</h2>
             <span className="font-display text-2xl font-extrabold text-carrot tabular-nums">
               {fmt(goals.kcal)} <span className="text-xs font-bold text-faint">ккал</span>
             </span>
           </div>
-          <div className="mt-1 flex items-center gap-3">
-            <input
-              type="range"
-              min={1200}
-              max={3500}
-              step={50}
-              value={goals.kcal}
-              onChange={(e) => setGoal({ kcal: Number(e.target.value) })}
-              className="flex-1"
-              aria-label="Цель по калориям"
-            />
-            <input
-              type="number"
-              className="field w-24 text-center font-bold tabular-nums"
-              value={goals.kcal}
-              min={800}
-              max={6000}
-              onChange={(e) => setGoal({ kcal: Math.max(0, Math.min(6000, Number(e.target.value) || 0)) })}
-            />
+          <input
+            type="range"
+            min={1200}
+            max={3500}
+            step={10}
+            value={goals.kcal}
+            onChange={(e) => onUpdateGoals({ ...goals, kcal: Number(e.target.value) })}
+            className="mt-4 w-full"
+          />
+          <div className="mt-1 flex justify-between text-[10px] font-semibold text-faint tabular-nums">
+            <span>1200</span><span>3500</span>
           </div>
+          <label className="mt-3 block">
+            <span className="mb-1 block text-xs font-semibold text-soft">Точное значение, ккал</span>
+            <input
+              className="field tabular-nums"
+              inputMode="numeric"
+              value={goals.kcal}
+              onChange={(e) => {
+                const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                if (Number.isFinite(n)) onUpdateGoals({ ...goals, kcal: Math.min(6000, n) });
+              }}
+            />
+          </label>
 
-          <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-3 gap-2.5">
             {(
               [
-                ["Белки, г", goals.p, "p", "var(--color-leaf)", "var(--color-leafwash)"],
-                ["Жиры, г", goals.f, "f", "var(--color-amber)", "var(--color-amberwash)"],
-                ["Углеводы, г", goals.c, "c", "var(--color-teal)", "var(--color-tealwash)"],
+                ["Белки", "p", "var(--color-leaf)", "var(--color-leafwash)"],
+                ["Жиры", "f", "var(--color-amber)", "var(--color-amberwash)"],
+                ["Углеводы", "c", "var(--color-teal)", "var(--color-tealwash)"],
               ] as const
-            ).map(([label, val, key, color, wash]) => (
-              <div key={key} className="rounded-xl p-3" style={{ background: wash }}>
-                <label className="text-[11px] font-bold" style={{ color }}>{label}</label>
+            ).map(([label, key, color, wash]) => (
+              <div key={key} className="rounded-xl px-2 py-2.5 text-center" style={{ background: wash }}>
                 <input
-                  type="number"
-                  className="mt-1 w-full rounded-lg border border-transparent bg-card px-2 py-1.5 text-center font-display text-base font-bold tabular-nums focus:border-line focus:outline-none"
-                  value={val}
-                  min={0}
-                  max={1000}
-                  onChange={(e) => setGoal({ [key]: Math.max(0, Math.min(1000, Number(e.target.value) || 0)) } as Partial<Goals>)}
+                  className="w-full bg-transparent text-center font-display text-base font-bold tabular-nums focus:outline-none"
+                  style={{ color }}
+                  inputMode="numeric"
+                  value={goals[key]}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                    if (Number.isFinite(n)) onUpdateGoals({ ...goals, [key]: Math.min(999, n) });
+                  }}
                 />
+                <div className="text-[10px] font-semibold" style={{ color }}>{label}, г</div>
               </div>
             ))}
           </div>
-
         </section>
 
-        {/* калькулятор */}
+        {/* калькулятор нормы + профиль */}
         <section className="card p-5">
           <h2 className="font-display text-[13px] font-bold">Калькулятор нормы</h2>
-          <p className="mt-0.5 text-[11px] text-faint">формула Миффлина — Сан-Жеора</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-faint">
+            Формула Миффлина — Сан-Жеора. Ваша норма поддержания ≈ <b className="text-ink">{fmt(tdee)} ккал</b>.
+          </p>
 
-          <div className="mt-3 grid grid-cols-2 rounded-xl border border-line bg-field p-1 text-xs font-semibold">
+          <div className="mt-3 grid grid-cols-2 gap-2.5">
+            <div>
+              <span className="mb-1 block text-xs font-semibold text-soft">Пол</span>
+              <div className="flex rounded-xl border border-line bg-field p-0.5">
+                {(["male", "female"] as Sex[]).map((s) => (
+                  <button key={s} onClick={() => onUpdateProfile({ ...profile, sex: s })}
+                    className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors ${profile.sex === s ? "bg-ink text-paperink" : "text-faint hover:text-soft"}`}>
+                    {s === "male" ? "М" : "Ж"}
+                  </button>
+                ))}
+              </div>
+            </div>
             {(
-              [
-                ["male", "Мужчина"],
-                ["female", "Женщина"],
-              ] as [Sex, string][]
-            ).map(([v, label]) => (
-              <button
-                key={v}
-                onClick={() => setProf({ sex: v })}
-                className={`rounded-lg py-1.5 transition-colors ${profile.sex === v ? "bg-ink text-paperink" : "text-soft hover:text-ink"}`}
+              [["Возраст", "age", 10, 120], ["Рост, см", "height", 100, 250], ["Вес, кг", "weight", 30, 400]] as const
+            ).map(([label, key, mn, mx]) => (
+              <label key={key} className="block">
+                <span className="mb-1 block text-xs font-semibold text-soft">{label}</span>
+                <input
+                  className="field tabular-nums"
+                  inputMode="decimal"
+                  value={profile[key]}
+                  onChange={(e) => {
+                    const n = parseFloat(e.target.value.replace(",", "."));
+                    if (Number.isFinite(n)) onUpdateProfile({ ...profile, [key]: Math.min(mx, Math.max(mn, n)) });
+                  }}
+                />
+              </label>
+            ))}
+            <label className="col-span-2 block">
+              <span className="mb-1 block text-xs font-semibold text-soft">Активность</span>
+              <select
+                className="field"
+                value={profile.activity}
+                onChange={(e) => onUpdateProfile({ ...profile, activity: Number(e.target.value) })}
               >
-                {label}
+                {ACTIVITIES.map((a) => (
+                  <option key={a.v} value={a.v}>{a.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(
+              [["Похудение", 0.85], ["Держать", 1], ["Набор", 1.1]] as const
+            ).map(([label, k]) => (
+              <button
+                key={label}
+                onClick={() => applySplit(tdee * k)}
+                className="btn-press rounded-full border border-line bg-field px-3.5 py-1.5 text-xs font-bold text-soft hover:border-leaf/50 hover:text-ink"
+              >
+                {label} · {fmt(Math.round(tdee * k))} ккал
               </button>
             ))}
           </div>
-
-          <div className="mt-3 grid grid-cols-3 gap-2.5">
-            {(
-              [
-                ["Возраст", profile.age, "age", 100],
-                ["Рост, см", profile.height, "height", 250],
-                ["Вес, кг", profile.weight, "weight", 400],
-              ] as const
-            ).map(([label, val, key, maxV]) => (
-              <div key={key}>
-                <label className="mb-1 block text-[11px] font-bold text-soft">{label}</label>
-                <input
-                  type="number"
-                  className="field tabular-nums"
-                  value={val}
-                  min={0}
-                  max={maxV}
-                  onChange={(e) => setProf({ [key]: Math.max(0, Math.min(maxV, Number(e.target.value) || 0)) } as Partial<Profile>)}
-                />
-              </div>
-            ))}
-          </div>
-          <label className="mb-1 mt-3 block text-[11px] font-bold text-soft">Активность</label>
-          <select
-            className="field"
-            value={profile.activity}
-            onChange={(e) => setProf({ activity: Number(e.target.value) })}
-          >
-            {ACTIVITIES.map((a) => (
-              <option key={a.v} value={a.v}>{a.label}</option>
-            ))}
-          </select>
-
-          <div className="mt-4 rounded-xl bg-ink p-4 text-paperink">
-            <div className="text-[11px] font-semibold uppercase tracking-wider opacity-60">Поддержание веса</div>
-            <div className="font-display text-3xl font-extrabold tabular-nums">{fmt(tdee)} ккал</div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {[
-                ["Похудение", Math.round(tdee * 0.85)],
-                ["Держать", tdee],
-                ["Набор", Math.round(tdee * 1.1)],
-              ].map(([label, v]) => (
-                <button
-                  key={label as string}
-                  onClick={() => applySplit(v as number)}
-                  className="btn-press rounded-lg border border-paperink/25 bg-paperink/10 px-2 py-2 text-center hover:bg-paperink/20"
-                >
-                  <span className="block text-[10px] font-semibold opacity-70">{label}</span>
-                  <span className="block font-display text-sm font-bold tabular-nums">{fmt(v as number)}</span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[10px] leading-snug opacity-60">
-              Нажатие установит калории и БЖУ (30/30/40) как дневную цель.
-            </p>
-          </div>
+          <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-faint">
+            <IAlert width={13} height={13} className="mt-px shrink-0" />
+            Кнопки применяют норму и БЖУ (30/30/40) к дневной цели.
+          </p>
         </section>
-
       </div>
     </div>
   );

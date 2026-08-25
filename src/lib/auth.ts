@@ -3,15 +3,14 @@ import type { AppData } from "../types";
 /**
  * Сервис аутентификации «Кушай вкусно».
  *
- * Локальная регистрация и вход по email/паролю: аккаунты, сессии и данные
- * хранятся в localStorage браузера, пароли — SHA-256 + соль (WebCrypto).
- * Вход через ВКонтакте реализован отдельно (см. vkid.ts) — VK ID SDK.
- * Supabase для авторизации НЕ используется.
+ * Работает автономно: аккаунты, сессии и «облачные» данные хранятся в
+ * localStorage браузера, пароли — SHA-256 + соль (WebCrypto).
+ * Вход строго через ВКонтакте (см. vkid.ts) или по email/паролю.
  */
 
-const ACCOUNTS_KEY = "kv:accounts";
-const SESSION_KEY = "kv:session";
-const DATA_PREFIX = "kv:data:";
+const ACCOUNTS_KEY = "kushai:accounts";
+const SESSION_KEY = "kushai:session";
+const DATA_PREFIX = "kushai:data:";
 
 export type Provider = "password" | "vk";
 
@@ -132,7 +131,7 @@ export function restoreSession(): SessionUser | null {
     storeSession({ ...s, token: rand(), expiresAt: now + ACCESS_TTL });
     return s.user; // тихое продление
   }
-  signOut(); // обе жизни истекли — на экран входа
+  signOut();
   return null;
 }
 
@@ -178,10 +177,7 @@ export async function signup(
   return user;
 }
 
-/**
- * Вход по email или никнейму + пароль.
- * Из соображений безопасности не уточняем, что именно неверно.
- */
+/** Вход по email или никнейму + пароль. Не уточняем, что именно неверно (безопасность). */
 export async function signin(
   identifier: string,
   password: string,
@@ -205,11 +201,10 @@ export async function signin(
   return user;
 }
 
-/* ---------- восстановление пароля ---------- */
+/* ---------- восстановление пароля (локально) ---------- */
 
 let pendingReset: { email: string; code: string; expires: number } | null = null;
 
-/** В демо-режиме возвращает код (в бою — отправляется письмом через Supabase). */
 export async function requestReset(email: string): Promise<string> {
   await delay(650);
   const em = email.trim().toLowerCase();
@@ -275,7 +270,7 @@ export function accountSyncedAt(userId: string): number | null {
 
 export const PROVIDER_LABEL: Record<Provider, string> = {
   password: "Email и пароль",
-  vk: "VK ID",
+  vk: "ВКонтакте",
 };
 
 /** индикатор сложности пароля: 0…4 */

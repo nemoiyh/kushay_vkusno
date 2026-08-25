@@ -14,14 +14,14 @@ export interface Food {
   unit?: { label: string; grams: number };
   /** штрихкод EAN-13 / EAN-8, если известен */
   barcode?: string;
-  /** когда продукт создан пользователем (для вкладки «Недавние») */
-  createdAt?: number;
-  /** бренд / производитель (из Open Food Facts) */
   brand?: string;
-  /** миниатюра товара (из Open Food Facts) */
   image?: string;
-  /** откуда продукт импортирован */
-  source?: { type: string; original_id: string; url: string };
+  createdAt?: number;
+  source?: {
+    type: "open_food_facts" | "manual";
+    original_id?: string;
+    url?: string;
+  };
 }
 
 export interface Entry {
@@ -62,18 +62,6 @@ export interface WeightEntry {
   value: number;
 }
 
-/** блоки страницы «Статистика», видимостью которых можно управлять */
-export type StatsBlockKey =
-  | "weight"
-  | "measures"
-  | "calories"
-  | "macros"
-  | "water"
-  | "activity"
-  | "steps"
-  | "sleep";
-
-/** ключи замеров тела */
 export type MeasureKey =
   | "chest"
   | "shoulders"
@@ -85,7 +73,7 @@ export type MeasureKey =
 
 export interface MeasureEntry {
   date: string;
-  value: number; // см
+  value: number;
 }
 
 export interface StepsEntry {
@@ -96,7 +84,7 @@ export interface StepsEntry {
 export interface ActivityEntry {
   date: string;
   minutes: number;
-  kcal: number; // активные ккал
+  kcal: number;
 }
 
 export interface SleepEntry {
@@ -105,7 +93,6 @@ export interface SleepEntry {
   quality?: "good" | "ok" | "bad";
 }
 
-/** ингредиент составного блюда */
 export interface RecipeIngredient {
   foodId?: string;
   name: string;
@@ -116,7 +103,6 @@ export interface RecipeIngredient {
   c: number;
 }
 
-/** составное блюдо («Мои блюда») */
 export interface Recipe {
   id: string;
   name: string;
@@ -124,33 +110,35 @@ export interface Recipe {
   createdAt: number;
 }
 
-/** счётчик использований продукта/блюда в дневнике */
 export interface UsageInfo {
   count: number;
   lastUsed: number;
-  /** последний использованный вес, г — для подсказки при повторном добавлении */
-  grams?: number;
+  grams: number;
 }
+
+export type StatsBlockKey =
+  | "weight"
+  | "measures"
+  | "calories"
+  | "macros"
+  | "water"
+  | "activity"
+  | "steps"
+  | "sleep";
 
 export interface AppData {
   days: Record<string, DayLog>;
   goals: Goals;
   profile: Profile;
   weights: WeightEntry[];
-  /** продукты пользователя (в т. ч. созданные по штрихкоду) */
   customFoods: Food[];
-  /** замеры тела по параметрам */
   measures: Record<MeasureKey, MeasureEntry[]>;
   steps: StepsEntry[];
   activity: ActivityEntry[];
   sleep: SleepEntry[];
-  /** какие блоки показывать на странице «Статистика» */
   statsVisibility: Record<StatsBlockKey, boolean>;
-  /** избранные продукты (id из базы или «Мои продукты») */
   favoriteIds: string[];
-  /** составные блюда пользователя */
   recipes: Recipe[];
-  /** сколько раз и с каким весом продукт добавляли в дневник */
   usage: Record<string, UsageInfo>;
 }
 

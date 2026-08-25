@@ -1,13 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData } from "../types";
 import type { SessionUser } from "../lib/auth";
-import {
-  consumeVkOAuthCallback,
-  preloadVkSdk,
-  startVkOAuth,
-  saveVkSession,
-  type VkTokenResponse,
-} from "../lib/vkid";
+import { startVkOAuth, saveVkSession, preloadVkSdk, onVkOAuthResult, type VkTokenResponse } from "../lib/vkid";
 import {
   AuthError,
   isValidEmail,
@@ -22,7 +16,6 @@ import {
 import { createFreshState, fmt, isLocallyModified, resetModifiedFlag } from "../lib/store";
 import { Modal, Ring } from "./ui";
 import {
-  IApple,
   IBarcode,
   IBook,
   ICheck,
@@ -30,6 +23,7 @@ import {
   ICloudCheck,
   IEye,
   IEyeOff,
+  IFlame,
   ILock,
   IMail,
   IUserIcon,
@@ -49,22 +43,6 @@ export function AuthScreen({
   const [mode, setMode] = useState<Mode>("landing");
   const [merge, setMerge] = useState<{ user: SessionUser; cloud: { data: AppData; syncedAt: number } | null } | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [vkAuthPending, setVkAuthPending] = useState(false);
-
-  // Проверяем возврат от VK после редиректа при монтировании
-  useEffect(() => {
-    consumeVkOAuthCallback().then((data) => {
-      if (data) {
-        const profile = saveVkSession(data);
-        onDone({
-          id: `vk-${profile.user_id}`,
-          email: profile.email ?? `id${profile.user_id}@vk.ru`,
-          name: profile.name,
-          provider: "vk",
-        });
-      }
-    });
-  }, []);
 
   /** после успешной аутентификации — проверяем, нужна ли миграция локальных данных */
   const finish = (user: SessionUser) => {
@@ -72,7 +50,7 @@ export function AuthScreen({
     if (isLocallyModified()) {
       setMerge({ user, cloud });
     } else if (cloud) {
-      onDone(user, cloud.data); // локальные данные не трогали — берём облачные
+      onDone(user, cloud.data);
     } else {
       onDone(user);
     }
@@ -93,14 +71,9 @@ export function AuthScreen({
 
   return (
     <div className="relative min-h-dvh overflow-hidden">
-      {/* живой фон */}
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <div className="absolute -left-24 top-16 size-72 rounded-full bg-leaf/10 blur-3xl" />
         <div className="absolute -right-20 bottom-10 size-80 rounded-full bg-carrot/10 blur-3xl" />
-        <Floaty className="left-[6%] top-[12%] text-amber/45" delay="0s"><IBook width={26} height={26} /></Floaty>
-        <Floaty className="right-[8%] top-[18%] text-leaf/40" delay="0.9s"><IApple width={30} height={30} /></Floaty>
-        <Floaty className="left-[10%] bottom-[16%] text-carrot/35" delay="1.6s"><IBarcode width={26} height={26} /></Floaty>
-        <Floaty className="right-[14%] bottom-[24%] text-teal/35" delay="0.5s"><ICloudCheck width={26} height={26} /></Floaty>
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-dvh max-w-5xl flex-col items-center gap-8 px-4 py-10 sm:px-6 lg:flex-row lg:items-center lg:gap-14 lg:py-16">
@@ -123,7 +96,6 @@ export function AuthScreen({
             хранились в аккаунте и не терялись при смене устройства.
           </p>
 
-          {/* живой мини-превью */}
           <div className="card mx-auto mt-7 flex max-w-md items-center gap-5 p-4 lg:mx-0">
             <Ring size={104} stroke={10} value={1420} max={2000} color="var(--color-leaf)">
               <span className="font-display text-lg font-extrabold tabular-nums">1 420</span>
@@ -178,8 +150,7 @@ export function AuthScreen({
             )}
           </div>
           <p className="mt-3 px-2 text-center text-[11px] leading-relaxed text-faint">
-            Аккаунт и данные хранятся в облаке. Вход через ВКонтакте работает через
-            официальный OAuth 2.0 — вы будете перенаправлены на сайт vk.com.
+            Вход через ВКонтакте или по email. Данные хранятся в вашем аккаунте.
           </p>
         </section>
       </div>
@@ -197,8 +168,7 @@ export function AuthScreen({
         >
           <div className="rounded-xl border border-line bg-paper p-4 text-sm leading-relaxed text-soft">
             В этом браузере ведётся дневник: <b className="text-ink">{fmt(localEntries)}</b>{" "}
-            {plural(localEntries, "запись", "записи", "записей")} и настройки. Объединить их с
-            аккаунтом <b className="text-ink">{merge.user.email}</b>?
+            записей и настройки. Объединить их с аккаунтом <b className="text-ink">{merge.user.email}</b>?
           </div>
           <div className="mt-4 flex flex-col gap-2.5">
             <button
@@ -226,9 +196,6 @@ export function AuthScreen({
               {merge.cloud ? "Нет, использовать данные аккаунта" : "Нет, начать заново"}
             </button>
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-faint">
-            «Нет» {merge.cloud ? "заменит локальный дневник данными аккаунта" : "очистит локальные данные"} — действие необратимо.
-          </p>
         </Modal>
       )}
 
@@ -240,12 +207,12 @@ export function AuthScreen({
               вашем аккаунте и в браузере устройства. Мы не передаём их третьим лицам.
             </p>
             <p>
-              <b className="text-ink">2.</b> Для входа через ВКонтакте мы получаем только ваш
-              VK ID, email и имя профиля — ничего лишнего.
+              <b className="text-ink">2.</b> Для входа через ВКонтакте мы получаем только email и
+              имя профиля — ничего лишнего.
             </p>
             <p>
               <b className="text-ink">3.</b> Вы можете в любой момент выгрузить все данные в JSON
-              (Настройки → Аккаунт) или полностью их удалить.
+              или полностью их удалить.
             </p>
           </div>
           <button
@@ -271,33 +238,64 @@ function Landing({
   onRegister: () => void;
   onVkLogin: (data: VkTokenResponse) => void;
 }) {
-  const [phase, setPhase] = useState<"idle" | "redirect">("idle");
+  const [phase, setPhase] = useState<"idle" | "popup" | "redirect">("idle");
   const [vkError, setVkError] = useState<string | null>(null);
+  const doneRef = useRef(false);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const onVkLoginRef = useRef(onVkLogin);
+  onVkLoginRef.current = onVkLogin;
 
-  // предзагружаем SDK в фоне
+  // предзагружаем SDK и подписываемся на результат из попапа
   useEffect(() => {
     preloadVkSdk();
+    const unsub = onVkOAuthResult((data) => {
+      doneRef.current = true;
+      onVkLoginRef.current(data);
+    });
+    return unsub;
   }, []);
 
-  /** Вход через ВКонтакте: полный редирект на страницу авторизации VK */
+  // следим за попапом: таймаут 10 с и факт закрытия окна
+  useEffect(() => {
+    if (phase !== "popup") return;
+    const timeout = window.setTimeout(() => {
+      if (!doneRef.current && phaseRef.current === "popup") {
+        setVkError(
+          "Не удалось соединиться с ВК. Попробуйте отключить блокировщик рекламы или войдите по Email.",
+        );
+        setPhase("idle");
+      }
+    }, 10000);
+    return () => window.clearTimeout(timeout);
+  }, [phase]);
+
+  /** Вход через ВКонтакте: окно авторизации открывается по клику */
   const handleVk = () => {
     setVkError(null);
-    startVkOAuth(() => setPhase("redirect"));
-    setPhase("redirect");
+    doneRef.current = false;
+    setPhase("popup");
+    void startVkOAuth(() => setPhase("redirect")).then((popup) => {
+      // если SDK/window.open вернул попап — ждём postMessage; если null и идёт redirect — страница уйдёт сама
+      if (!popup && phaseRef.current !== "redirect") {
+        // openOAuthPopup открыл своё окно — продолжаем ждать (таймаут подстрахует)
+      }
+    });
   };
 
-  const busy = phase === "redirect";
+  const busy = phase !== "idle";
   const caption =
     phase === "redirect"
       ? "Перенаправляем в ВКонтакте…"
-      : "Войти через ВКонтакте";
+      : phase === "popup"
+        ? "Открываем ВКонтакте…"
+        : "Войти через ВКонтакте";
 
   return (
     <div className="anim-in">
       <h2 className="font-display text-lg font-extrabold">Добро пожаловать</h2>
       <p className="mt-1 text-[13px] text-soft">Войдите, чтобы начать вести дневник</p>
 
-      {/* Главный способ — редирект на авторизацию ВКонтакте */}
       <button
         onClick={handleVk}
         disabled={busy}
@@ -357,10 +355,10 @@ function Field({
     <label className="block">
       <span className="mb-1.5 block text-xs font-bold text-soft">{label}</span>
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint">{icon}</span>
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint z-10">{icon}</span>
         {children}
       </div>
-      {error && <span className="mt-1.5 block text-[11px] font-medium leading-snug text-danger">{error}</span>}
+      {error && <span className="mt-1.5 block text-[11px] font-medium text-danger">{error}</span>}
     </label>
   );
 }
@@ -368,13 +366,11 @@ function Field({
 function PasswordInput({
   value,
   onChange,
-  placeholder,
   invalid,
   autoComplete,
 }: {
   value: string;
   onChange: (v: string) => void;
-  placeholder?: string;
   invalid?: boolean;
   autoComplete?: string;
 }) {
@@ -383,8 +379,8 @@ function PasswordInput({
     <div className="relative">
       <input
         type={show ? "text" : "password"}
-        className={`field pl-10 pr-10 ${invalid ? "field-invalid" : ""}`}
-        placeholder={placeholder ?? "••••••••"}
+        className={`field pl-10 pr-11 ${invalid ? "field-invalid" : ""}`}
+        placeholder="••••••••"
         value={value}
         autoComplete={autoComplete}
         onChange={(e) => onChange(e.target.value)}
@@ -466,14 +462,11 @@ function LoginForm({
 
   const submit = async () => {
     setError("");
-    const idn = identifier.trim();
-    if (!idn) return setError("Введите email или никнейм");
-    // если похоже на email — проверим формат; ник может быть без @
-    if (idn.includes("@") && !isValidEmail(idn)) return setError("Похоже, в email опечатка");
+    if (!identifier.trim()) return setError("Введите email или никнейм");
     if (!password) return setError("Введите пароль");
     setBusy(true);
     try {
-      onSuccess(await signin(idn, password, remember));
+      onSuccess(await signin(identifier, password, remember));
     } catch (e) {
       setError(e instanceof AuthError ? e.message : "Не удалось войти. Попробуйте ещё раз.");
       setBusy(false);
@@ -483,13 +476,13 @@ function LoginForm({
   return (
     <div className="anim-in">
       <BackRow onBack={onBack} title="Вход" />
-      <div className="flex flex-col space-y-4">
+      <div className="flex flex-col gap-4">
         {error && <ErrorBanner text={error} />}
         <Field label="Email или никнейм" icon={<IMail width={15} height={15} />}>
           <input
             className="field pl-10"
             type="text"
-            placeholder="you@example.ru или ник"
+            placeholder="you@example.ru"
             autoComplete="username"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
@@ -597,7 +590,7 @@ function RegisterForm({
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <div className="flex flex-col gap-1.5">
+        <div>
           <Field label="Пароль (мин. 8 символов)" icon={<ILock width={15} height={15} />} error={fieldErr.password}>
             <PasswordInput
               value={password}
@@ -606,13 +599,14 @@ function RegisterForm({
               autoComplete="new-password"
             />
           </Field>
-          {/* индикатор сложности — вне <label> поля, чтобы не ломать его высоту */}
-          <StrengthBar password={password} />
+          <div className="mb-1">
+            <StrengthBar password={password} />
+          </div>
         </div>
         <Field label="Повторите пароль" icon={<ILock width={15} height={15} />} error={fieldErr.confirm}>
           <PasswordInput value={confirm} onChange={setConfirm} invalid={!!fieldErr.confirm} autoComplete="new-password" />
         </Field>
-        <div className="flex flex-col gap-1.5">
+        <div>
           <label className="flex cursor-pointer items-start gap-2 text-xs font-medium text-soft">
             <input
               type="checkbox"
@@ -627,7 +621,7 @@ function RegisterForm({
               </button>
             </span>
           </label>
-          {fieldErr.terms && <span className="mt-0.5 block text-[11px] font-medium text-danger">{fieldErr.terms}</span>}
+          {fieldErr.terms && <span className="mt-1.5 block text-[11px] font-medium text-danger">{fieldErr.terms}</span>}
         </div>
         <button
           onClick={submit}
@@ -691,9 +685,9 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
       {error && <div className="mb-3"><ErrorBanner text={error} /></div>}
 
       {step === 1 && (
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-4">
           <p className="text-[13px] leading-relaxed text-soft">
-            Укажите email аккаунта — покажем код для смены пароля.
+            Укажите email аккаунта — пришлём код для смены пароля.
           </p>
           <Field label="Email" icon={<IMail width={15} height={15} />}>
             <input
@@ -710,19 +704,19 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
             className="btn-press flex items-center justify-center gap-2 rounded-xl bg-leaf px-4 py-3 text-sm font-bold text-paperink disabled:opacity-60"
           >
             {busy && <span className="spinner" style={{ borderTopColor: "var(--color-paperink)" }} />}
-            Получить код
+            Отправить код
           </button>
         </div>
       )}
 
       {step === 2 && (
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-4">
           <div className="rounded-xl border border-dashed border-water/50 bg-waterwash/60 p-3.5">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-water">Код для смены пароля</p>
-            <p className="mt-1 text-xs text-soft">Данные хранятся локально, поэтому код показан здесь:</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-water">Ваш код</p>
+            <p className="mt-1 text-xs text-soft">В реальной версии код придёт на почту, а здесь он для наглядности:</p>
             <p className="mt-1.5 font-display text-xl font-extrabold tracking-[0.3em] text-ink tabular-nums">{localCode}</p>
           </div>
-          <Field label="Код" icon={<ILock width={15} height={15} />}>
+          <Field label="Код из письма" icon={<ILock width={15} height={15} />}>
             <input
               className="field pl-10 text-center font-bold tracking-widest tabular-nums"
               inputMode="numeric"
@@ -760,25 +754,4 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
       )}
     </div>
   );
-}
-
-/* ---------- декор ---------- */
-
-function Floaty({ className, delay, children }: { className?: string; delay?: string; children: React.ReactNode }) {
-  return (
-    <span
-      className={`absolute ${className ?? ""}`}
-      style={{ animation: `floaty 7s ease-in-out infinite`, animationDelay: delay }}
-    >
-      {children}
-    </span>
-  );
-}
-
-function plural(n: number, one: string, few: string, many: string) {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
-  return many;
 }

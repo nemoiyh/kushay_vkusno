@@ -1,13 +1,6 @@
 # Деплой «Кушай вкусно» на GitHub Pages.
-#
-# Собирает проект и публикует папку dist в ветку gh-pages через
-# peaceiris/actions-gh-pages. Базовый путь — относительный (base: "./" в
-# vite.config.js), поэтому сборка работает в любой подпапке GitHub Pages
-# независимо от имени репозитория: username.github.io/<любой_репо>/.
-#
-# После первого прогона: Settings → Pages → Source: Deploy from a branch →
-# ветка gh-pages, папка / (root).
-
+# Пути относительные (base: "./" в vite.config.js), поэтому сайт работает
+# в подпапке username.github.io/<repo>/ с любым именем репозитория.
 name: Deploy to GitHub Pages
 
 on:
@@ -38,8 +31,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # base — относительный ("./" из vite.config.js): ассеты, manifest и
-      # service worker загрузятся из подпапки репозитория, каким бы ни было имя
       - name: Build
         run: npm run build
 
