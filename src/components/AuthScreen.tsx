@@ -3,10 +3,7 @@ import type { AppData } from "../types";
 import type { SessionUser } from "../lib/auth";
 import {
   consumeVkOAuthCallback,
-  preloadVkSdk,
-  startVkOAuth,
   saveVkSession,
-  type VkTokenResponse,
 } from "../lib/vkid";
 import {
   AuthError,
@@ -76,17 +73,6 @@ export function AuthScreen({
     } else {
       onDone(user);
     }
-  };
-
-  /** Успешный вход через VK ID: сохраняем токен/профиль и переходим в приложение */
-  const handleVkLogin = (data: VkTokenResponse) => {
-    const profile = saveVkSession(data);
-    finish({
-      id: `vk-${profile.user_id}`,
-      email: profile.email ?? `id${profile.user_id}@vk.ru`,
-      name: profile.name,
-      provider: "vk",
-    });
   };
 
   const localEntries = Object.values(localData.days).reduce((s, d) => s + d.entries.length, 0);
@@ -167,7 +153,6 @@ export function AuthScreen({
               <Landing
                 onLogin={() => setMode("login")}
                 onRegister={() => setMode("register")}
-                onVkLogin={handleVkLogin}
               />
             ) : mode === "login" ? (
               <LoginForm onBack={() => setMode("landing")} onForgot={() => setMode("forgot")} onSwitch={() => setMode("register")} onSuccess={finish} />
@@ -265,32 +250,11 @@ export function AuthScreen({
 function Landing({
   onLogin,
   onRegister,
-  onVkLogin,
 }: {
   onLogin: () => void;
   onRegister: () => void;
-  onVkLogin: (data: VkTokenResponse) => void;
 }) {
-  const [phase, setPhase] = useState<"idle" | "redirect">("idle");
   const [vkError, setVkError] = useState<string | null>(null);
-
-  // предзагружаем SDK в фоне
-  useEffect(() => {
-    preloadVkSdk();
-  }, []);
-
-  /** Вход через ВКонтакте: полный редирект на страницу авторизации VK */
-  const handleVk = () => {
-    setVkError(null);
-    startVkOAuth(() => setPhase("redirect"));
-    setPhase("redirect");
-  };
-
-  const busy = phase === "redirect";
-  const caption =
-    phase === "redirect"
-      ? "Перенаправляем в ВКонтакте…"
-      : "Войти через ВКонтакте";
 
   return (
     <div className="anim-in">
@@ -298,18 +262,13 @@ function Landing({
       <p className="mt-1 text-[13px] text-soft">Войдите, чтобы начать вести дневник</p>
 
       {/* Главный способ — редирект на авторизацию ВКонтакте */}
-      <button
-        onClick={handleVk}
-        disabled={busy}
-        className="btn-press mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#07f] px-4 py-3.5 text-sm font-bold text-white shadow-[0_4px_0_rgba(0,60,160,0.35)] transition-transform hover:brightness-110 disabled:opacity-60"
+      <a
+        href="https://id.vk.com/authorize?client_id=54728657&redirect_uri=https://nemoiyh.github.io/kushay_vkusno/&response_type=code"
+        className="btn-press mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#07f] px-4 py-3.5 text-sm font-bold text-white shadow-[0_4px_0_rgba(0,60,160,0.35)] transition-transform hover:brightness-110"
       >
-        {busy ? (
-          <span className="spinner" style={{ borderTopColor: "#fff" }} />
-        ) : (
-          <IVk width={20} height={20} />
-        )}
-        {caption}
-      </button>
+        <IVk width={20} height={20} />
+        Войти через ВКонтакте
+      </a>
       {vkError && (
         <p className="anim-in mt-2.5 rounded-xl border border-danger/35 bg-dangerwash px-3 py-2 text-xs font-semibold leading-relaxed text-danger">
           {vkError}
@@ -597,7 +556,7 @@ function RegisterForm({
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <div className="flex flex-col gap-1.5">
+        <div className="mb-4 flex flex-col gap-1.5">
           <Field label="Пароль (мин. 8 символов)" icon={<ILock width={15} height={15} />} error={fieldErr.password}>
             <PasswordInput
               value={password}
@@ -609,9 +568,11 @@ function RegisterForm({
           {/* индикатор сложности — вне <label> поля, чтобы не ломать его высоту */}
           <StrengthBar password={password} />
         </div>
-        <Field label="Повторите пароль" icon={<ILock width={15} height={15} />} error={fieldErr.confirm}>
-          <PasswordInput value={confirm} onChange={setConfirm} invalid={!!fieldErr.confirm} autoComplete="new-password" />
-        </Field>
+        <div className="mb-4">
+          <Field label="Повторите пароль" icon={<ILock width={15} height={15} />} error={fieldErr.confirm}>
+            <PasswordInput value={confirm} onChange={setConfirm} invalid={!!fieldErr.confirm} autoComplete="new-password" />
+          </Field>
+        </div>
         <div className="flex flex-col gap-1.5">
           <label className="flex cursor-pointer items-start gap-2 text-xs font-medium text-soft">
             <input

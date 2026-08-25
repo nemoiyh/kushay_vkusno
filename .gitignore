@@ -6,7 +6,7 @@ node_modules/
 dist/
 build/
 *.js.map
-*.tsbuildinfo
+*.ts.map
 
 # Environment variables
 .env
@@ -22,27 +22,39 @@ build/
 # Logs
 *.log
 
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
 # Temporary files
 *.tmp
 *.temp
 
-# Coverage reports
-coverage/
-htmlcov/
-*.coverage
+# OS files
+.DS_Store
+Thumbs.db
 
-# Python cache
+# Python artifacts (if any Python in project)
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+*.so
 
-# Distribution / packaging
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Compressed files
+*.zip
 *.tar.gz
-*.whl
-*.egg-info/
-
-# OS generated files
-.DS_Store
-Thumbs.db
+*.tar.bz2
+*.tar.xz
+*.gz
+*.rar
+*.7z
 ```

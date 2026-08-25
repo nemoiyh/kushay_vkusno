@@ -576,10 +576,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <p className="px-1 text-[10px] leading-relaxed text-faint">
-              Данные хранятся локально в браузере. База — {fmt(FOODS.length)} продуктов, включая
-              каталог «Перекрёстка».
-            </p>
           </div>
         </aside>
 
