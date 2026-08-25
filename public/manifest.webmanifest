@@ -1,0 +1,39 @@
+{
+  "name": "Кушай вкусно — дневник питания и счётчик калорий",
+  "short_name": "Кушай вкусно",
+  "description": "Дневник питания: калории, БЖУ, вода, вес и статистика. Работает офлайн, данные хранятся на устройстве.",
+  "lang": "ru",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e9f0f0",
+  "theme_color": "#e9f0f0",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "https://image.qwenlm.ai/generated-images/d3f7e042-ac15-4531-8403-df7eba42d1e0/_result.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
