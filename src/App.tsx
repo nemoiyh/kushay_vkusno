@@ -44,8 +44,10 @@ import {
 } from "./lib/auth";
 import {
   clearVkSession,
+  consumeVkOAuthCallback,
   getVkProfile,
   hasVkSession,
+  saveVkSession,
 } from "./lib/vkid";
 import { cloudLoadData, cloudSaveData } from "./lib/supabase";
 import { FOODS } from "./data/foods";
@@ -83,39 +85,68 @@ export default function App() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [booting, setBooting] = useState(true);
 
-  // при старте проверяем сессию: сначала VK ID (vk_token), затем демо-режим
+  // при старте проверяем сессию: возврат из VK OAuth → vk_token → email/пароль
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      let u: SessionUser | null = null;
+    let cancelled = false;
+    let timer: number | undefined;
 
-      // 1) активная сессия VK ID
-      if (hasVkSession()) {
-        const p = getVkProfile();
-        if (p) {
-          u = {
-            id: `vk-${p.user_id}`,
-            email: p.email ?? `id${p.user_id}@vk.ru`,
-            name: p.name,
-            provider: "vk",
-          };
+    const applyUser = (u: SessionUser) => {
+      const acc = loadAccountData(u.id);
+      if (acc) setData(acc.data);
+      resetModifiedFlag();
+      // подтягиваем свежие данные из облака (Supabase), если настроен
+      cloudLoadData(u.id).then((cloud) => {
+        if (!cancelled && cloud) setData(cloud);
+      });
+    };
+
+    (async () => {
+      // 0) возможен возврат из окна авторизации VK (redirect-флоу)
+      const vkData = await consumeVkOAuthCallback();
+      if (cancelled) return;
+      if (vkData) {
+        const p = saveVkSession(vkData);
+        const u: SessionUser = {
+          id: `vk-${p.user_id}`,
+          email: p.email ?? `id${p.user_id}@vk.ru`,
+          name: p.name,
+          provider: "vk",
+        };
+        applyUser(u);
+        setUser(u);
+        setBooting(false);
+        return;
+      }
+
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        let u: SessionUser | null = null;
+
+        // 1) активная сессия VK ID
+        if (hasVkSession()) {
+          const p = getVkProfile();
+          if (p) {
+            u = {
+              id: `vk-${p.user_id}`,
+              email: p.email ?? `id${p.user_id}@vk.ru`,
+              name: p.name,
+              provider: "vk",
+            };
+          }
         }
-      }
-      // 2) демо-сессия (email/пароль)
-      if (!u) u = restoreSession();
+        // 2) сессия email/пароль
+        if (!u) u = restoreSession();
 
-      if (u) {
-        const acc = loadAccountData(u.id);
-        if (acc) setData(acc.data);
-        resetModifiedFlag();
-        // подтягиваем свежие данные из облака (Supabase), если настроен
-        cloudLoadData(u.id).then((cloud) => {
-          if (cloud) setData(cloud);
-        });
-      }
-      setUser(u);
-      setBooting(false);
-    }, 500);
-    return () => window.clearTimeout(t);
+        if (u) applyUser(u);
+        setUser(u);
+        setBooting(false);
+      }, 500);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -127,14 +158,19 @@ export default function App() {
     }
   }, [data, user]);
 
-  const handleAuthDone = useCallback((u: SessionUser, merged?: AppData) => {
+  /**
+   * Единая функция успешного входа. Вызывается и после входа через ВКонтакте,
+   * и после регистрации/входа по email: записывает пользователя, подгружает его
+   * данные (или создаёт пустые структуры для нового аккаунта) и пускает в приложение.
+   */
+  const handleLoginSuccess = useCallback((u: SessionUser, merged?: AppData) => {
     setUser(u);
     resetModifiedFlag();
     if (merged) setData(merged);
     else {
       const acc = loadAccountData(u.id);
       if (acc) setData(acc.data);
-      else setData(createFreshState());
+      else setData(createFreshState()); // пустые структуры дневника/настроек для нового аккаунта
     }
     // после входа дополнительно подтягиваем данные из облака (Supabase), если они новее
     cloudLoadData(u.id).then((cloud) => {
@@ -144,7 +180,7 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     if (user) saveAccountData(user.id, data);
-    // выход: чистим и демо-сессию, и сессию VK ID (vk_token / user_profile)
+    // выход: чистим сессию email/пароль и сессию VK ID (vk_token / user_profile)
     signOut();
     clearVkSession();
     setUser(null);
@@ -468,7 +504,7 @@ export default function App() {
   // проверка сессии при старте — спиннер вместо мигающего экрана входа
   if (booting) return <Splash />;
   // защита интерфейса: без авторизации показывается только экран входа
-  if (!user) return <AuthScreen localData={data} onDone={handleAuthDone} />;
+  if (!user) return <AuthScreen localData={data} onDone={handleLoginSuccess} />;
 
   return (
     <div className="min-h-dvh">
