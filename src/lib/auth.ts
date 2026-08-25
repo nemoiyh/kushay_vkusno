@@ -3,29 +3,23 @@ import type { AppData } from "../types";
 /**
  * Сервис аутентификации «Кушай вкусно».
  *
- * Сейчас работает в автономном (демо) режиме: аккаунты, сессии и «облачные»
- * данные хранятся в localStorage браузера, пароли — SHA-256 + соль (WebCrypto).
- *
- * Для боевого режима подключите Supabase и замените реализации функций на:
- *   signup        → supabase.auth.signUp({ email, password })
- *   signin        → supabase.auth.signInWithPassword({ email, password })
- *   signinWithProvider → supabase.auth.signInWithOAuth({ provider })   (google | vk | apple)
- *   requestReset  → supabase.auth.resetPasswordForEmail(email)
- *   load/saveAccountData → таблица profiles (jsonb) + RLS-политики
- * Сессии Supabase (JWT + refresh) обрабатывает сам SDK — restoreSession/signOut
- * тогда сводятся к getSession()/signOut().
+ * Локальная регистрация и вход по email/паролю: аккаунты, сессии и данные
+ * хранятся в localStorage браузера, пароли — SHA-256 + соль (WebCrypto).
+ * Вход через ВКонтакте реализован отдельно (см. vkid.ts) — VK ID SDK.
+ * Supabase для авторизации НЕ используется.
  */
 
 const ACCOUNTS_KEY = "kv:accounts";
 const SESSION_KEY = "kv:session";
 const DATA_PREFIX = "kv:data:";
 
-export type Provider = "password" | "google" | "vk" | "apple";
+export type Provider = "password" | "vk";
 
 export interface Account {
   id: string;
   email: string;
   name?: string;
+  nickname?: string;
   provider: Provider;
   passHash?: string;
   salt?: string;
@@ -36,6 +30,7 @@ export interface SessionUser {
   id: string;
   email: string;
   name?: string;
+  nickname?: string;
   provider: Provider;
 }
 
@@ -67,8 +62,9 @@ export class AuthError extends Error {
 
 const delay = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
+/** Уникальный id пользователя: user_<timestamp>_<случайная часть> */
 const newId = () =>
-  Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  `user_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 function rand(bytes = 24): string {
   const a = new Uint8Array(bytes);
@@ -152,71 +148,60 @@ export function signOut() {
 export const isValidEmail = (s: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim());
 
-export async function signup(email: string, password: string): Promise<SessionUser> {
+export async function signup(
+  email: string,
+  password: string,
+  nickname?: string,
+): Promise<SessionUser> {
   await delay(550);
   if (!navigator.onLine) throw new AuthError("network", "Ошибка сети. Проверьте интернет.");
   const em = email.trim().toLowerCase();
+  const nick = nickname?.trim() || undefined;
   const accounts = readAccounts();
   if (accounts.some((a) => a.email === em))
     throw new AuthError("email-taken", "Этот email уже занят. Попробуйте войти.");
+  if (nick && accounts.some((a) => a.provider === "password" && a.nickname?.toLowerCase() === nick.toLowerCase()))
+    throw new AuthError("email-taken", "Этот никнейм уже занят. Попробуйте другой.");
   const salt = rand(8);
   const acc: Account = {
     id: newId(),
     email: em,
+    nickname: nick,
     provider: "password",
     salt,
     passHash: await hashPassword(password, salt),
     createdAt: Date.now(),
   };
   writeAccounts([...accounts, acc]);
-  storeSession(makeSession({ id: acc.id, email: acc.email, provider: "password" }, true));
-  return { id: acc.id, email: acc.email, provider: "password" };
+  const user: SessionUser = { id: acc.id, email: acc.email, nickname: acc.nickname, provider: "password" };
+  storeSession(makeSession(user, true));
+  return user;
 }
 
+/**
+ * Вход по email или никнейму + пароль.
+ * Из соображений безопасности не уточняем, что именно неверно.
+ */
 export async function signin(
-  email: string,
+  identifier: string,
   password: string,
   remember: boolean,
 ): Promise<SessionUser> {
   await delay(550);
   if (!navigator.onLine) throw new AuthError("network", "Ошибка сети. Проверьте интернет.");
-  const em = email.trim().toLowerCase();
-  const acc = readAccounts().find((a) => a.email === em && a.provider === "password");
-  // из соображений безопасности не уточняем, что именно неверно
+  const idn = identifier.trim().toLowerCase();
+  const acc = readAccounts().find(
+    (a) =>
+      a.provider === "password" &&
+      (a.email === idn || (a.nickname && a.nickname.toLowerCase() === idn)),
+  );
   if (!acc || !acc.salt || !acc.passHash)
-    throw new AuthError("invalid-credentials", "Неверный email или пароль");
+    throw new AuthError("invalid-credentials", "Неверный email/никнейм или пароль");
   const h = await hashPassword(password, acc.salt);
   if (h !== acc.passHash)
-    throw new AuthError("invalid-credentials", "Неверный email или пароль");
-  storeSession(makeSession({ id: acc.id, email: acc.email, provider: "password" }, remember));
-  return { id: acc.id, email: acc.email, provider: "password" };
-}
-
-/* ---------- вход через соцсети (демо-эмуляция OAuth) ---------- */
-
-const OAUTH_DEMO: Record<Exclude<Provider, "password">, { name: string; email: string }> = {
-  google: { name: "Google Demo", email: "demo.google@kv.app" },
-  vk: { name: "VK ID Demo", email: "demo.vk@kv.app" },
-  apple: { name: "Apple ID Demo", email: "demo.apple@kv.app" },
-};
-
-/**
- * В демо-режиме эмулирует редирект к провайдеру: создаёт (или находит) аккаунт
- * провайдера и открывает сессию. В боевом режиме — signInWithOAuth у Supabase;
- * запись пользователя создаётся автоматически при первом входе.
- */
-export async function signinWithProvider(p: Exclude<Provider, "password">): Promise<SessionUser> {
-  await delay(1200); // «редирект» к провайдеру
-  if (!navigator.onLine) throw new AuthError("network", "Ошибка сети. Проверьте интернет.");
-  const meta = OAUTH_DEMO[p];
-  const accounts = readAccounts();
-  let acc = accounts.find((a) => a.provider === p);
-  if (!acc) {
-    acc = { id: newId(), email: meta.email, name: meta.name, provider: p, createdAt: Date.now() };
-    writeAccounts([...accounts, acc]);
-  }
-  const user: SessionUser = { id: acc.id, email: acc.email, name: acc.name, provider: p };
-  storeSession(makeSession(user, true));
+    throw new AuthError("invalid-credentials", "Неверный email/никнейм или пароль");
+  const user: SessionUser = { id: acc.id, email: acc.email, nickname: acc.nickname, provider: "password" };
+  storeSession(makeSession(user, remember));
   return user;
 }
 
@@ -289,15 +274,9 @@ export function accountSyncedAt(userId: string): number | null {
 /* ---------- разное ---------- */
 
 export const PROVIDER_LABEL: Record<Provider, string> = {
-  password: "Пароль",
-  google: "Google",
+  password: "Email и пароль",
   vk: "VK ID",
-  apple: "Apple",
 };
-
-export function isAppleDevice(): boolean {
-  return /iphone|ipad|ipod|macintosh|mac os/i.test(navigator.userAgent);
-}
 
 /** индикатор сложности пароля: 0…4 */
 export function passwordStrength(pw: string): { score: 0 | 1 | 2 | 3 | 4; label: string } {

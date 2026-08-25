@@ -84,10 +84,10 @@ Workflow уже лежит в `.github/workflows/deploy.yml` (peaceiris/actions-
 
 1. Откройте [dev.vk.com](https://dev.vk.com) → приложение с ID `54728657`.
 2. «Настройки» → **Доверенные Redirect URI** → добавьте точный адрес деплоя:
-   `https://ВАШ_НИК.github.io/kushay-vkusno/` (со слэшем на конце).
-3. Сохраните. Без этого шага виджет входа вернёт ошибку.
+   `https://ВАШ_НИК.github.io/kushay_vkusno/` (со слэшем на конце).
+3. Сохраните. Без этого шага вход через ВКонтакте вернёт ошибку.
 
-> Виджет берёт redirectUrl из адреса, по которому открыт (`src/lib/vkid.ts`), поэтому
+> Окно авторизации берёт redirectUrl из адреса, по которому открыт (`src/lib/vkid.ts`), поэтому
 > работает и на Netlify, и на GitHub Pages без пересборки. Зафиксировать конкретный адрес
 > можно переменной окружения `VITE_VK_REDIRECT_URL` при сборке.
 
@@ -204,18 +204,26 @@ npx cap open android   # открыть проект в Android Studio
 - Заменить `appId` в `capacitor.config.ts` и название приложения `appName`.
 - Обновить версию: `CFBundleShortVersionString` в Xcode / `versionName` в Android.
 
-## Авторизация (VK ID) и база данных (Supabase)
+## Авторизация (VK ID + Email/пароль) и база данных (Supabase)
 
-**Вход — только через VK ID.** Авторизация полностью делегирована нативному OneTap-виджету VK ID
-(`src/lib/vkid.ts`): после входа SDK возвращает authorization code, мы обмениваем его на токены
-через `VKID.Auth.exchangeCode` и храним в localStorage (`vk_token`, `user_profile`).
-Supabase для авторизации **не используется** — только как база данных.
+Два способа входа, оба ведут в приложение через единую функцию `handleLoginSuccess`:
 
-- Конфиг виджета: `app: 54728657`, `redirectUrl: https://kushayvkusno.netlify.app/`, SDK `@vkid/sdk@2.1.0`.
-- При запуске приложение проверяет `vk_token`: если он есть — открывается дневник, иначе — экран входа.
-- Кнопка «Выйти» (Настройки → Аккаунт) чистит `vk_token` и `user_profile` и возвращает на экран входа.
-- На экране входа также есть «демо-режим» (email/пароль, данные только в этом браузере) —
-  виджет VK ID работает только на домене, указанном в `redirectUrl`.
+**1. Через ВКонтакте (основной).** Кнопка «Войти через ВКонтакте» открывает полноценное окно
+авторизации VK ID (`src/lib/vkid.ts`, метод `VKID.Auth.openOAuthPopup()`, SDK `@vkid/sdk@2.1.0`;
+fallback — полный redirect на `id.vk.com/authorize`). После входа VK возвращает `code` + `device_id`,
+мы обмениваем их на токены через `VKID.Auth.exchangeCode` и храним в localStorage
+(`vk_token`, `user_profile`). Конфиг: `app: 54728657`, `redirectUrl` берётся из адреса, по которому
+открыто приложение (или из `VITE_VK_REDIRECT_URL`). **Обязательно** добавьте этот URL в
+«Доверенные Redirect URI» на dev.vk.com.
+
+**2. По Email и паролю (локально).** Регистрация (никнейм + email + пароль) и вход — в
+`src/lib/auth.ts`, данные и пароли (SHA-256 + соль) хранятся в localStorage. Вход возможен по email
+или никнейму. Данные каждого аккаунта изолированы (`kv:data:<userId>`).
+
+- При запуске приложение проверяет, по порядку: возврат из окна VK → `vk_token` → сессию email/пароль.
+  Если ничего нет — экран входа.
+- Кнопка «Выйти» (Настройки → Аккаунт) чистит и VK-сессию, и сессию email/пароль.
+- Supabase для авторизации **не используется** — только как база данных (см. ниже).
 
 **Supabase — только CRUD** (`src/lib/supabase.ts`). Клиент создаётся лениво и только при наличии
 переменных окружения, иначе приложение работает на localStorage:
@@ -241,9 +249,9 @@ src/
   components/   — экраны (Дневник, Продукты, Статистика, Настройки), AuthScreen, модальные окна, UI-кит
   data/foods.ts — база продуктов (КБЖУ на 100 г)
   lib/store.ts  — localStorage, даты, расчёты, демо-данные
-  lib/vkid.ts   — вход через VK ID (OneTap-виджет, обмен code → токены)
+  lib/vkid.ts   — вход через VK ID (окно авторизации, обмен code → токены)
   lib/supabase.ts — Supabase-клиент (только CRUD, ленивая загрузка)
-  lib/auth.ts   — демо-режим (email/пароль) и локальные «облачные» данные
+  lib/auth.ts   — локальная регистрация и вход по email/паролю
 public/
   manifest.webmanifest, sw.js — PWA-обвязка (манифест + офлайн-кэш)
 scripts/build-apk.sh — локальная сборка Android-версии

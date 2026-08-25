@@ -1,17 +1,19 @@
 /**
- * Интеграция VK ID (low-code, OneTap-виджет).
+ * Интеграция VK ID (low-code).
  *
  * Авторизация полностью делегирована VK ID — Supabase здесь НЕ используется.
- * После успеха мы сами обмениваем authorization code на токены через
- * VKID.Auth.exchangeCode и храним их в localStorage (vk_token / user_profile).
+ * Вместо OneTap-шторки используется полноценное окно авторизации: метод
+ * VKID.Auth.openOAuthPopup() (SDK 2.x), а если он недоступен — полный
+ * redirect на id.vk.com/authorize. В обоих случаях после входа VK возвращает
+ * нас на redirectUrl с параметрами code + device_id, которые мы обмениваем на
+ * токены через VKID.Auth.exchangeCode и храним в localStorage
+ * (vk_token / user_profile).
  */
 
 /* Типизация минимального API VK ID SDK */
 declare global {
   interface Window {
     VKIDSDK?: VkSdk;
-    vkidOnSuccess?: (data: VkTokenResponse) => void;
-    vkidOnError?: (error: unknown) => void;
   }
 }
 
@@ -21,17 +23,11 @@ interface VkSdk {
   };
   ConfigResponseMode: { Callback: string; [k: string]: string };
   ConfigSource: { LOWCODE: string; [k: string]: string };
-  WidgetEvents: { ERROR: string; [k: string]: string };
-  OneTapInternalEvents: { LOGIN_SUCCESS: string; [k: string]: string };
-  OneTap: new () => VkOneTap;
+  OneTap: new () => unknown;
   Auth: {
     exchangeCode: (code: string, deviceId: string) => Promise<VkTokenResponse>;
+    openOAuthPopup?: (opts?: { state?: string; redirectUrl?: string }) => unknown;
   };
-}
-
-interface VkOneTap {
-  render: (opts: { container: HTMLElement; showAlternativeLogin?: boolean }) => VkOneTap;
-  on: (event: string, handler: (payload: unknown) => void) => VkOneTap;
 }
 
 export interface VkTokenResponse {
@@ -54,15 +50,14 @@ export interface VkProfile {
 }
 
 const SDK_URL = "https://unpkg.com/@vkid/sdk@2.1.0/dist-sdk/umd/index.js";
-const APP_ID = 54728657;
+export const APP_ID = 54728657;
 
 /**
  * redirectUrl для VK ID. По умолчанию — адрес, по которому открыто приложение
- * (origin + path, например https://username.github.io/repo-name/) — так виджет
- * работает на любом домене деплоя без пересборки.
- * Точное значение можно зафиксировать переменной окружения VITE_VK_REDIRECT_URL.
- * ВАЖНО: итоговый URL должен быть добавлен в «Доверенные Redirect URI»
- * приложения на dev.vk.com, иначе вход не сработает.
+ * (origin + path, например https://username.github.io/repo-name/) — так вход
+ * работает на любом домене деплоя без пересборки. Точное значение можно
+ * зафиксировать переменной окружения VITE_VK_REDIRECT_URL. ВАЖНО: итоговый URL
+ * должен быть добавлен в «Доверенные Redirect URI» приложения на dev.vk.com.
  */
 const REDIRECT_URL =
   (import.meta.env.VITE_VK_REDIRECT_URL as string | undefined) ??
@@ -70,6 +65,7 @@ const REDIRECT_URL =
 
 const TOKEN_KEY = "vk_token";
 const PROFILE_KEY = "user_profile";
+const STATE_KEY = "vk_oauth_state";
 
 let sdkPromise: Promise<VkSdk | null> | null = null;
 
@@ -89,6 +85,34 @@ function loadSdk(): Promise<VkSdk | null> {
     document.head.appendChild(s);
   });
   return sdkPromise;
+}
+
+function initConfig(VKID: VkSdk) {
+  VKID.Config.init({
+    app: APP_ID,
+    redirectUrl: REDIRECT_URL,
+    responseMode: VKID.ConfigResponseMode.Callback,
+    source: VKID.ConfigSource.LOWCODE,
+    scope: "email",
+  });
+}
+
+function randState(): string {
+  const a = new Uint8Array(12);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Прямой OAuth-адрес (используется как fallback, если openOAuthPopup нет). */
+export function buildAuthorizeUrl(state: string): string {
+  return (
+    "https://id.vk.com/authorize" +
+    `?app_id=${APP_ID}` +
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URL)}` +
+    `&redirect_state=${encodeURIComponent(state)}` +
+    "&response_mode=callback" +
+    "&scope=email"
+  );
 }
 
 /* ---------- сессия VK ID ---------- */
@@ -140,49 +164,103 @@ export function clearVkSession(): void {
 /** Есть ли активная сессия VK ID. */
 export const hasVkSession = (): boolean => Boolean(getVkToken() && getVkProfile());
 
-/* ---------- рендер OneTap-виджета ---------- */
+/* ---------- вход через полноценное окно авторизации ---------- */
 
 /**
- * Рендерит OneTap-виджет VK ID в контейнер.
- * Возвращает функцию очистки (виджет сам управляет попапом).
+ * Открывает полноценное окно авторизации VK (не OneTap-шторку).
+ *
+ * Сначала пробуем нативный VKID.Auth.openOAuthPopup() — результат придёт через
+ * postMessage из попапа (попап редиректит на наш redirectUrl с code в URL,
+ * загружает приложение, а оно отдаёт токены основному окну и закрывается).
+ * Если метода нет — делаем полный redirect в этом окне: после входа VK вернёт
+ * нас сюда с code в URL, и его обработает consumeVkOAuthCallback() при загрузке.
  */
-export async function renderVkOneTap(
-  container: HTMLElement,
+export async function startVkOAuth(
   onSuccess: (data: VkTokenResponse) => void,
   onError: (error: unknown) => void,
-): Promise<(() => void) | null> {
+): Promise<void> {
   const VKID = await loadSdk();
   if (!VKID) {
-    onError(new Error("Не удалось загрузить VK ID SDK"));
-    return null;
+    onError(new Error("Не удалось загрузить VK ID SDK. Проверьте интернет."));
+    return;
+  }
+  initConfig(VKID);
+
+  const state = randState();
+  try {
+    sessionStorage.setItem(STATE_KEY, state);
+  } catch { /* ignore */ }
+
+  // Слушаем ответ из попапа (он пришлёт токены через postMessage)
+  const onMessage = (ev: MessageEvent) => {
+    const d = ev.data as { __kvVk?: VkTokenResponse } | null;
+    if (d && d.__kvVk) {
+      window.removeEventListener("message", onMessage);
+      onSuccess(d.__kvVk);
+    }
+  };
+  window.addEventListener("message", onMessage);
+
+  if (typeof VKID.Auth.openOAuthPopup === "function") {
+    try {
+      VKID.Auth.openOAuthPopup({ state, redirectUrl: REDIRECT_URL });
+      return; // результат придёт через postMessage
+    } catch {
+      /* метод бросил исключение — падаем на redirect ниже */
+    }
   }
 
-  VKID.Config.init({
-    app: APP_ID,
-    redirectUrl: REDIRECT_URL,
-    responseMode: VKID.ConfigResponseMode.Callback,
-    source: VKID.ConfigSource.LOWCODE,
-    scope: "",
-  });
+  // Фолбэк: полный redirect в этом окне (самый надёжный вариант)
+  window.location.assign(buildAuthorizeUrl(state));
+}
 
-  const oneTap = new VKID.OneTap();
+/**
+ * Вызывается при старте приложения. Если в URL есть code + device_id (возврат
+ * из VK), обменивает их на токены. В попапе — отдаёт результат основному окну
+ * и закрывается; при полном редиректе — возвращает данные для входа здесь.
+ */
+export async function consumeVkOAuthCallback(): Promise<VkTokenResponse | null> {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("code");
+  const deviceId = url.searchParams.get("device_id");
+  const state =
+    url.searchParams.get("state") ?? url.searchParams.get("redirect_state");
+  if (!code || !deviceId) return null;
 
-  oneTap
-    .render({
-      container,
-      showAlternativeLogin: true,
-    })
-    .on(VKID.WidgetEvents.ERROR, (err) => onError(err))
-    .on(VKID.OneTapInternalEvents.LOGIN_SUCCESS, (payload) => {
-      const p = payload as { code: string; device_id: string };
-      VKID.Auth.exchangeCode(p.code, p.device_id).then(onSuccess).catch(onError);
-    });
+  let expected: string | null = null;
+  try {
+    expected = sessionStorage.getItem(STATE_KEY);
+  } catch { /* ignore */ }
 
-  // Глобальные обработчики (на случай, если SDK ожидает их в window)
-  window.vkidOnSuccess = onSuccess;
-  window.vkidOnError = onError;
+  // Чистим URL, чтобы параметры не мешали приложению
+  url.searchParams.delete("code");
+  url.searchParams.delete("device_id");
+  url.searchParams.delete("state");
+  url.searchParams.delete("redirect_state");
+  window.history.replaceState(null, "", url.toString());
 
-  return () => {
-    container.innerHTML = "";
-  };
+  // Если state не совпадает — это не наш флоу, игнорируем
+  if (expected && state && state !== expected) return null;
+
+  const VKID = await loadSdk();
+  if (!VKID) return null;
+  initConfig(VKID);
+
+  try {
+    const data = await VKID.Auth.exchangeCode(code, deviceId);
+    try {
+      sessionStorage.removeItem(STATE_KEY);
+    } catch { /* ignore */ }
+
+    // Мы в попапе — отдаём токены основному окну и закрываемся
+    if (window.opener) {
+      window.opener.postMessage({ __kvVk: data }, "*");
+      window.close();
+      return null;
+    }
+    // Полный редирект — входим прямо в этом окне
+    return data;
+  } catch {
+    return null;
+  }
 }
