@@ -147,6 +147,23 @@ export function GoalsView({
                 ))}
               </select>
             </label>
+            <label className="col-span-2 block">
+              <span className="mb-1 block text-xs font-semibold text-soft">
+                Целевой вес, кг <span className="font-normal text-faint">(необязательно — линия на графике)</span>
+              </span>
+              <input
+                className="field tabular-nums"
+                inputMode="decimal"
+                placeholder="например, 75"
+                value={profile.targetWeight ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(",", ".").trim();
+                  if (raw === "") return onUpdateProfile({ ...profile, targetWeight: undefined });
+                  const n = parseFloat(raw);
+                  if (Number.isFinite(n)) onUpdateProfile({ ...profile, targetWeight: Math.min(400, Math.max(30, n)) });
+                }}
+              />
+            </label>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">

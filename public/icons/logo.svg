@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- «Кушай вкусно» — фирменный знак: вилка + ложка + капля.
+       Брендбук: бирюза #2A9D8F + графит #264653 -->
+  <rect width="128" height="128" rx="30" fill="#264653"/>
+
+  <!-- вилка -->
+  <path
+    d="M29 30v15 M38 28v17 M47 30v15 M29 45q9 7 18 0 M38 48v51"
+    fill="none"
+    stroke="#2A9D8F"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- ложка -->
+  <ellipse cx="90" cy="40" rx="12" ry="16" fill="none" stroke="#2A9D8F" stroke-width="7"/>
+  <path d="M90 56v43" fill="none" stroke="#2A9D8F" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- капля -->
+  <path
+    d="M64 20 C60 30 51 39 51 47 a13 13 0 0 0 26 0 C77 39 68 30 64 20 Z"
+    fill="#2A9D8F"
+  />
+  <circle cx="59.5" cy="49" r="3.2" fill="rgba(255,255,255,0.45)"/>
+</svg>

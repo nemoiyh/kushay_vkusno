@@ -142,18 +142,22 @@ export const IVk = (p: P) => (
 
 /** Логотип: вилка-лист на плашке цвета морской волны */
 export function LogoMark({ size = 36 }: { size?: number }) {
+  // Фирменный знак «Кушай вкусно»: вилка + ложка + капля (брендбук #2A9D8F / #264653)
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden>
-      <rect width="100" height="100" rx="24" fill="var(--color-leaf)" />
+    <svg width={size} height={size} viewBox="0 0 128 128" aria-hidden>
+      <rect width="128" height="128" rx="30" fill="#264653" />
       <path
-        d="M35 22v18m10-18v18m-15-9h20M45 40v14c0 5-2 8-6 10"
-        stroke="#F2F7F7"
-        strokeWidth="6"
-        strokeLinecap="round"
+        d="M29 30v15 M38 28v17 M47 30v15 M29 45q9 7 18 0 M38 48v51"
         fill="none"
+        stroke="#2A9D8F"
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <path d="M62 34c12 6 15 20 5 32-12-3-18-17-5-32z" fill="#F2F7F7" />
-      <circle cx="72" cy="30" r="5" fill="#E4572E" />
+      <ellipse cx="90" cy="40" rx="12" ry="16" fill="none" stroke="#2A9D8F" strokeWidth="7" />
+      <path d="M90 56v43" fill="none" stroke="#2A9D8F" strokeWidth="7" strokeLinecap="round" />
+      <path d="M64 20 C60 30 51 39 51 47 a13 13 0 0 0 26 0 C77 39 68 30 64 20 Z" fill="#2A9D8F" />
+      <circle cx="59.5" cy="49" r="3.2" fill="rgba(255,255,255,0.45)" />
     </svg>
   );
 }
