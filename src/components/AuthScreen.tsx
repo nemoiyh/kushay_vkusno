@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AppData } from "../types";
 import type { SessionUser } from "../lib/auth";
 import {
-  onVkOAuthResult,
+  consumeVkOAuthCallback,
   preloadVkSdk,
   startVkOAuth,
   saveVkSession,
@@ -49,6 +49,22 @@ export function AuthScreen({
   const [mode, setMode] = useState<Mode>("landing");
   const [merge, setMerge] = useState<{ user: SessionUser; cloud: { data: AppData; syncedAt: number } | null } | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
+  const [vkAuthPending, setVkAuthPending] = useState(false);
+
+  // Проверяем возврат от VK после редиректа при монтировании
+  useEffect(() => {
+    consumeVkOAuthCallback().then((data) => {
+      if (data) {
+        const profile = saveVkSession(data);
+        onDone({
+          id: `vk-${profile.user_id}`,
+          email: profile.email ?? `id${profile.user_id}@vk.ru`,
+          name: profile.name,
+          provider: "vk",
+        });
+      }
+    });
+  }, []);
 
   /** после успешной аутентификации — проверяем, нужна ли миграция локальных данных */
   const finish = (user: SessionUser) => {
@@ -162,8 +178,8 @@ export function AuthScreen({
             )}
           </div>
           <p className="mt-3 px-2 text-center text-[11px] leading-relaxed text-faint">
-            Аккаунт и данные хранятся в этом браузере. Вход через ВКонтакте работает через
-            официальный виджет VK ID.
+            Аккаунт и данные хранятся в облаке. Вход через ВКонтакте работает через
+            официальный OAuth 2.0 — вы будете перенаправлены на сайт vk.com.
           </p>
         </section>
       </div>
@@ -255,77 +271,33 @@ function Landing({
   onRegister: () => void;
   onVkLogin: (data: VkTokenResponse) => void;
 }) {
-  const [phase, setPhase] = useState<"idle" | "popup" | "redirect">("idle");
+  const [phase, setPhase] = useState<"idle" | "redirect">("idle");
   const [vkError, setVkError] = useState<string | null>(null);
-  const popupRef = useRef<Window | null>(null);
-  const doneRef = useRef(false);
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
-  const onVkLoginRef = useRef(onVkLogin);
-  onVkLoginRef.current = onVkLogin;
 
-  // предзагружаем SDK и подписываемся на результат из попапа
+  // предзагружаем SDK в фоне
   useEffect(() => {
     preloadVkSdk();
-    const unsub = onVkOAuthResult((data) => {
-      doneRef.current = true;
-      onVkLoginRef.current(data);
-    });
-    return unsub;
   }, []);
 
-  // следим за попапом: таймаут 10 с и факт закрытия окна
-  useEffect(() => {
-    if (phase !== "popup") return;
-    const timeout = window.setTimeout(() => {
-      if (!doneRef.current && phaseRef.current === "popup") {
-        setVkError(
-          "Не удалось соединиться с ВК. Попробуйте отключить блокировщик рекламы или войдите по Email.",
-        );
-        setPhase("idle");
-      }
-    }, 10000);
-    const poll = window.setInterval(() => {
-      const p = popupRef.current;
-      if (p && !p.closed) return;
-      window.clearInterval(poll);
-      // даём postMessage долететь; если вход так и не случился — сообщаем
-      window.setTimeout(() => {
-        if (!doneRef.current && phaseRef.current === "popup") {
-          setVkError("Окно входа ВКонтакте было закрыто. Попробуйте ещё раз.");
-          setPhase("idle");
-        }
-      }, 700);
-    }, 400);
-    return () => {
-      window.clearTimeout(timeout);
-      window.clearInterval(poll);
-    };
-  }, [phase]);
-
-  /** Вход через ВКонтакте: окно авторизации открывается синхронно по клику */
+  /** Вход через ВКонтакте: полный редирект на страницу авторизации VK */
   const handleVk = () => {
     setVkError(null);
-    doneRef.current = false;
-    const popup = startVkOAuth(() => setPhase("redirect"));
-    popupRef.current = popup;
-    setPhase(popup ? "popup" : "redirect");
+    startVkOAuth(() => setPhase("redirect"));
+    setPhase("redirect");
   };
 
-  const busy = phase !== "idle";
+  const busy = phase === "redirect";
   const caption =
     phase === "redirect"
       ? "Перенаправляем в ВКонтакте…"
-      : phase === "popup"
-        ? "Открываем ВКонтакте…"
-        : "Войти через ВКонтакте";
+      : "Войти через ВКонтакте";
 
   return (
     <div className="anim-in">
       <h2 className="font-display text-lg font-extrabold">Добро пожаловать</h2>
       <p className="mt-1 text-[13px] text-soft">Войдите, чтобы начать вести дневник</p>
 
-      {/* Главный способ — окно авторизации ВКонтакте */}
+      {/* Главный способ — редирект на авторизацию ВКонтакте */}
       <button
         onClick={handleVk}
         disabled={busy}
@@ -603,7 +575,7 @@ function RegisterForm({
   return (
     <div className="anim-in">
       <BackRow onBack={onBack} title="Регистрация" />
-      <div className="flex flex-col space-y-4">
+      <div className="flex flex-col gap-4">
         {error && <ErrorBanner text={error} />}
         <Field label="Никнейм (для входа по нику)" icon={<IUserIcon width={15} height={15} />} error={fieldErr.nickname}>
           <input
@@ -625,7 +597,7 @@ function RegisterForm({
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <div>
+        <div className="flex flex-col gap-1.5">
           <Field label="Пароль (мин. 8 символов)" icon={<ILock width={15} height={15} />} error={fieldErr.password}>
             <PasswordInput
               value={password}
@@ -640,7 +612,7 @@ function RegisterForm({
         <Field label="Повторите пароль" icon={<ILock width={15} height={15} />} error={fieldErr.confirm}>
           <PasswordInput value={confirm} onChange={setConfirm} invalid={!!fieldErr.confirm} autoComplete="new-password" />
         </Field>
-        <div>
+        <div className="flex flex-col gap-1.5">
           <label className="flex cursor-pointer items-start gap-2 text-xs font-medium text-soft">
             <input
               type="checkbox"
@@ -655,7 +627,7 @@ function RegisterForm({
               </button>
             </span>
           </label>
-          {fieldErr.terms && <span className="mt-1 block text-[11px] font-medium text-danger">{fieldErr.terms}</span>}
+          {fieldErr.terms && <span className="mt-0.5 block text-[11px] font-medium text-danger">{fieldErr.terms}</span>}
         </div>
         <button
           onClick={submit}
