@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData } from "../types";
 import type { SessionUser } from "../lib/auth";
-import { startVkOAuth, saveVkSession, preloadVkSdk, onVkOAuthResult, type VkTokenResponse } from "../lib/vkid";
+import { vkLoginUrl, saveVkSession, preloadVkSdk, onVkOAuthResult, type VkTokenResponse } from "../lib/vkid";
 import {
   AuthError,
   isValidEmail,
@@ -238,79 +238,65 @@ function Landing({
   onRegister: () => void;
   onVkLogin: (data: VkTokenResponse) => void;
 }) {
-  const [phase, setPhase] = useState<"idle" | "popup" | "redirect">("idle");
+  const [navigating, setNavigating] = useState(false);
   const [vkError, setVkError] = useState<string | null>(null);
-  const doneRef = useRef(false);
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
   const onVkLoginRef = useRef(onVkLogin);
   onVkLoginRef.current = onVkLogin;
+  // адрес входа ВКонтакте — обычная ссылка, генерируется один раз при монтировании
+  const [loginUrl] = useState(() => vkLoginUrl());
 
-  // предзагружаем SDK и подписываемся на результат из попапа
+  // предзагружаем SDK (понадобится при возврате для обмена code→токены)
+  // и подписываемся на возможный результат из попапа
   useEffect(() => {
     preloadVkSdk();
-    const unsub = onVkOAuthResult((data) => {
-      doneRef.current = true;
-      onVkLoginRef.current(data);
-    });
+    const unsub = onVkOAuthResult((data) => onVkLoginRef.current(data));
     return unsub;
   }, []);
 
-  // следим за попапом: таймаут 10 с и факт закрытия окна
+  // страховка: если через 10 секунд переход так и не состоялся
+  // (браузер или расширение заблокировало навигацию) — сообщаем об ошибке
   useEffect(() => {
-    if (phase !== "popup") return;
-    const timeout = window.setTimeout(() => {
-      if (!doneRef.current && phaseRef.current === "popup") {
-        setVkError(
-          "Не удалось соединиться с ВК. Попробуйте отключить блокировщик рекламы или войдите по Email.",
-        );
-        setPhase("idle");
-      }
+    if (!navigating) return;
+    const t = window.setTimeout(() => {
+      setNavigating(false);
+      setVkError(
+        "Не удалось открыть ВКонтакте. Проверьте настройки блокировки всплывающих окон или попробуйте войти по Email.",
+      );
     }, 10000);
-    return () => window.clearTimeout(timeout);
-  }, [phase]);
-
-  /** Вход через ВКонтакте: окно авторизации открывается по клику */
-  const handleVk = () => {
-    setVkError(null);
-    doneRef.current = false;
-    setPhase("popup");
-    void startVkOAuth(() => setPhase("redirect")).then((popup) => {
-      // если SDK/window.open вернул попап — ждём postMessage; если null и идёт redirect — страница уйдёт сама
-      if (!popup && phaseRef.current !== "redirect") {
-        // openOAuthPopup открыл своё окно — продолжаем ждать (таймаут подстрахует)
-      }
-    });
-  };
-
-  const busy = phase !== "idle";
-  const caption =
-    phase === "redirect"
-      ? "Перенаправляем в ВКонтакте…"
-      : phase === "popup"
-        ? "Открываем ВКонтакте…"
-        : "Войти через ВКонтакте";
+    return () => window.clearTimeout(t);
+  }, [navigating]);
 
   return (
     <div className="anim-in">
       <h2 className="font-display text-lg font-extrabold">Добро пожаловать</h2>
       <p className="mt-1 text-[13px] text-soft">Войдите, чтобы начать вести дневник</p>
 
-      <button
-        onClick={handleVk}
-        disabled={busy}
-        className="btn-press mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#07f] px-4 py-3.5 text-sm font-bold text-white shadow-[0_4px_0_rgba(0,60,160,0.35)] transition-transform hover:brightness-110 disabled:opacity-60"
+      {/* Обычная ссылка на страницу авторизации ВК — синхронная навигация,
+          никаких попапов и «вечной загрузки». После входа ВК вернёт нас сюда. */}
+      <a
+        href={loginUrl}
+        onClick={() => {
+          setVkError(null);
+          setNavigating(true);
+        }}
+        rel="noopener"
+        className="btn-press mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#07f] px-4 py-3.5 text-sm font-bold text-white shadow-[0_4px_0_rgba(0,60,160,0.35)] transition-transform hover:brightness-110"
       >
-        {busy ? (
+        {navigating ? (
           <span className="spinner" style={{ borderTopColor: "#fff" }} />
         ) : (
           <IVk width={20} height={20} />
         )}
-        {caption}
-      </button>
+        {navigating ? "Перенаправляем в ВКонтакте…" : "Войти через ВКонтакте"}
+      </a>
       {vkError && (
         <p className="anim-in mt-2.5 rounded-xl border border-danger/35 bg-dangerwash px-3 py-2 text-xs font-semibold leading-relaxed text-danger">
           {vkError}
+        </p>
+      )}
+      {!navigating && !vkError && (
+        <p className="mt-2 text-center text-[11px] text-faint">
+          Перейдёте на страницу ВКонтакте, а после входа вернётесь сюда
         </p>
       )}
 

@@ -102,11 +102,29 @@ export function buildAuthorizeUrl(state: string): string {
   const p = new URLSearchParams({
     app_id: String(APP_ID),
     redirect_uri: REDIRECT_URL,
+    // state дублируем в обоих параметрах — так адрес совместим и с классическим
+    // OAuth, и с low-code/callback-режимом VK ID
+    state,
     redirect_state: state,
     response_mode: "callback",
     scope: "email",
   });
   return `https://id.vk.com/authorize?${p.toString()}`;
+}
+
+/**
+ * Синхронный адрес входа ВКонтакте — для использования в обычной ссылке
+ * `<a href={vkLoginUrl()}>`. Генерирует anti-CSRF state и сохраняет его,
+ * чтобы при возврате consumeVkOAuthCallback() мог сверить его.
+ */
+export function vkLoginUrl(): string {
+  const state = randState();
+  try {
+    sessionStorage.setItem(STATE_KEY, state);
+  } catch {
+    /* приватный режим */
+  }
+  return buildAuthorizeUrl(state);
 }
 
 /* ---------- сессия VK ID ---------- */
