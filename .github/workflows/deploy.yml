@@ -1,0 +1,52 @@
+# Деплой «Кушай вкусно» на GitHub Pages.
+#
+# Собирает проект с базовым путём /<имя-репозитория>/ (GitHub Pages отдаёт сайты
+# из подпапки username.github.io/<repo-name>/) и публикует папку dist в ветку
+# gh-pages через peaceiris/actions-gh-pages.
+#
+# После первого прогона: Settings → Pages → Source: Deploy from a branch →
+# ветка gh-pages, папка / (root).
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # base = /имя-репозитория/ — все ассеты, manifest и service worker
+      # загрузятся из подпапки GitHub Pages, а не от корня домена
+      - name: Build
+        run: npm run build -- --base=/${{ github.event.repository.name }}/
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "deploy: ${{ github.event.head_commit.message }}"

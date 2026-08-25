@@ -55,7 +55,18 @@ export interface VkProfile {
 
 const SDK_URL = "https://unpkg.com/@vkid/sdk@2.1.0/dist-sdk/umd/index.js";
 const APP_ID = 54728657;
-const REDIRECT_URL = "https://kushayvkusno.netlify.app/";
+
+/**
+ * redirectUrl для VK ID. По умолчанию — адрес, по которому открыто приложение
+ * (origin + path, например https://username.github.io/repo-name/) — так виджет
+ * работает на любом домене деплоя без пересборки.
+ * Точное значение можно зафиксировать переменной окружения VITE_VK_REDIRECT_URL.
+ * ВАЖНО: итоговый URL должен быть добавлен в «Доверенные Redirect URI»
+ * приложения на dev.vk.com, иначе вход не сработает.
+ */
+const REDIRECT_URL =
+  (import.meta.env.VITE_VK_REDIRECT_URL as string | undefined) ??
+  (typeof window !== "undefined" ? window.location.origin + window.location.pathname : "");
 
 const TOKEN_KEY = "vk_token";
 const PROFILE_KEY = "user_profile";
