@@ -15,7 +15,7 @@ import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB0DjBVTOCK7j4z0R8dvjVHtcUHrFl-jRQ",
+  apiKey: "AIzaSyB0DjBVTOCK7j4z0R8dvjVHtcUHrFL-jRQ",
   authDomain: "kushay-vkusno.firebaseapp.com",
   projectId: "kushay-vkusno",
   storageBucket: "kushay-vkusno.firebasestorage.app",
