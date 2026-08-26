@@ -103,15 +103,16 @@ function randState(): string {
  *  Правильный вид:
  *  https://id.vk.com/authorize?client_id=...&redirect_uri=...&response_type=code&scope=email */
 export function buildAuthorizeUrl(state: string): string {
-  const p = new URLSearchParams({
-    client_id: String(APP_ID),
-    redirect_uri: REDIRECT_URL,
-    response_type: "code",
-    scope: "email",
-    // возвращаемый VK state — защита от подмены при возврате
-    redirect_state: state,
-  });
-  return `https://id.vk.com/authorize?${p.toString()}`;
+  // Собираем через стандартный URL API: он гарантирует ровно ОДИН «?» после
+  // пути и параметры, разделённые «&» (никаких «authorize??client_id=…»).
+  const url = new URL("https://id.vk.com/authorize");
+  url.searchParams.set("client_id", String(APP_ID));
+  url.searchParams.set("redirect_uri", REDIRECT_URL);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "email");
+  // возвращаемый VK state — защита от подмены при возврате
+  url.searchParams.set("redirect_state", state);
+  return url.toString();
 }
 
 /**
