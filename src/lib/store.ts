@@ -280,6 +280,25 @@ export function resetModifiedFlag() {
 
 export const createFreshState = () => seedState();
 
+/** «Чистый» дневник без демо-данных — выдаётся при регистрации нового ника. */
+export function emptyState(): AppData {
+  return {
+    days: {},
+    goals: { kcal: 2000, p: 100, f: 67, c: 200 },
+    profile: { sex: "male", age: 28, height: 178, weight: 75, activity: 1.375 },
+    weights: [],
+    customFoods: [],
+    measures: emptyMeasures(),
+    steps: [],
+    activity: [],
+    sleep: [],
+    statsVisibility: defaultStatsVisibility(),
+    favoriteIds: [],
+    recipes: [],
+    usage: {},
+  };
+}
+
 export const fmt = (n: number) => n.toLocaleString("ru-RU");
 
 /** число с одним знаком, через запятую (для «7,5 ч», «81,4 кг») */

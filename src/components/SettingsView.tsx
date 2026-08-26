@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { AppData, Goals, Profile, StatsBlockKey } from "../types";
 import { fmt } from "../lib/store";
-import { accountSyncedAt, type SessionUser } from "../lib/auth";
+import type { User } from "../lib/auth";
 import { FOODS } from "../data/foods";
 import { GoalsView } from "./GoalsView";
 import {
@@ -46,7 +46,7 @@ export function SettingsView({
   onReset: () => void;
   statsVisibility: AppData["statsVisibility"];
   onToggleStat: (id: StatsBlockKey) => void;
-  account: { user: SessionUser; providerLabel: string; onLogout: () => void };
+  account: { user: User; onLogout: () => void };
 }) {
   const [screen, setScreen] = useState<Screen>("menu");
 
@@ -106,12 +106,12 @@ export function SettingsView({
       ) : (
         <SubScreen title="Приложение" onBack={() => setScreen("menu")} subtitle="Аккаунт и синхронизация">
           <div className="max-w-2xl">
-            <AccountCard user={account.user} providerLabel={account.providerLabel} onLogout={account.onLogout} />
+            <AccountCard user={account.user} onLogout={account.onLogout} />
             <div className="card mt-5 p-5">
               <h3 className="font-display text-[13px] font-bold">О приложении</h3>
               <ul className="mt-3 space-y-2 text-sm text-soft">
                 <li>Каталог — {fmt(FOODS.length)} продуктов, включая «Перекрёсток»</li>
-                <li>Данные хранятся в вашем аккаунте и локально на устройстве</li>
+                <li>Данные хранятся локально на вашем устройстве</li>
                 <li>Работает офлайн после первого открытия</li>
               </ul>
             </div>
@@ -172,15 +172,14 @@ function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; labe
   );
 }
 
-function AccountCard({ user, providerLabel, onLogout }: { user: SessionUser; providerLabel: string; onLogout: () => void }) {
+function AccountCard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [confirm, setConfirm] = useState(false);
   useEffect(() => {
     if (!confirm) return;
     const t = window.setTimeout(() => setConfirm(false), 4000);
     return () => window.clearTimeout(t);
   }, [confirm]);
-  const syncedAt = accountSyncedAt(user.id);
-  const initial = (user.name?.[0] ?? user.email[0] ?? "?").toUpperCase();
+  const initial = (user.nick[0] ?? "?").toUpperCase();
   const doLogout = () => {
     if (confirm) { setConfirm(false); onLogout(); }
     else setConfirm(true);
@@ -192,22 +191,13 @@ function AccountCard({ user, providerLabel, onLogout }: { user: SessionUser; pro
           {initial}
         </span>
         <div className="min-w-0">
-          {user.name && <div className="truncate text-sm font-bold">{user.name}</div>}
-          <div className="truncate text-xs text-soft">{user.email}</div>
-          <div className="mt-0.5 text-[11px] text-faint">
-            Вход через {providerLabel}
-            {syncedAt && (
-              <>
-                {" · синхронизировано в "}
-                {new Date(syncedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-              </>
-            )}
-          </div>
+          <div className="truncate text-sm font-bold">@{user.nick}</div>
+          <div className="mt-0.5 text-[11px] text-faint">Локальный аккаунт</div>
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-[11px] leading-snug text-faint">
-          Данные сохраняются в вашем аккаунте и подхватятся при следующем входе на этом устройстве.
+          Данные хранятся в этом браузере под вашим ником и откроются при следующем входе.
         </p>
         <button
           onClick={doLogout}

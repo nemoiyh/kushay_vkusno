@@ -8,13 +8,8 @@ import {
   recipeTotals, resetModifiedFlag, round1, ru1, saveState, shiftKey, streakDays, todayKey, uid, upsertByDate,
 } from "./lib/store";
 import {
-  PROVIDER_LABEL, loadAccountData, restoreSession, saveAccountData, signOut, type SessionUser,
+  getSessionUser, loadUserData, saveUserData, signOut, type User,
 } from "./lib/auth";
-import {
-  clearVkSession, consumeVkOAuthCallback, consumeVkOAuthError, getVkProfile, hasVkSession,
-  saveVkSession, takeVkCallbackError,
-} from "./lib/vkid";
-import { cloudLoadData, cloudSaveData } from "./lib/supabase";
 import { ErrorBoundary, ToastStack } from "./components/ui";
 import { IApple, IBook, IChart, IFlame, ISettings, LogoMark } from "./components/Icons";
 import { DiaryView } from "./components/DiaryView";
@@ -38,79 +33,37 @@ export default function App() {
   const [draft, setDraft] = useState<(EntryDraftInput & { dateKey: string; ts: number }) | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  /* ------- аккаунт: сессия, «облако», выход ------- */
-  const [user, setUser] = useState<SessionUser | null>(null);
+  /* ------- аккаунт: сессия «ник + пароль», выход ------- */
+  const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
-  const [vkBootError, setVkBootError] = useState<string | null>(null);
 
-  // при старте: обрабатываем возврат из VK OAuth, затем проверяем сессию
+  // при старте: если в kv_session есть ник — сразу показываем приложение
   useEffect(() => {
-    let cancelled = false;
-    // если ВК вернул ошибку (Redirect URI не совпал, вход отменён и т.п.) —
-    // показываем понятное сообщение вместо белого экрана
-    setVkBootError(consumeVkOAuthError());
-    (async () => {
-      // 0) возврат из VK (в URL есть code) — обмениваем и входим
-      const vkData = await consumeVkOAuthCallback();
-      if (cancelled) return;
-      // если обмен code→токены не удался — показываем сообщение на экране входа
-      const cbErr = takeVkCallbackError();
-      if (cbErr) setVkBootError(cbErr);
-      let u: SessionUser | null = null;
-      if (vkData) {
-        const p = saveVkSession(vkData);
-        u = { id: `vk-${p.user_id}`, email: p.email ?? `id${p.user_id}@vk.ru`, name: p.name, provider: "vk" };
-      }
-      // 1) активная сессия VK ID
-      if (!u && hasVkSession()) {
-        const p = getVkProfile();
-        if (p) u = { id: `vk-${p.user_id}`, email: p.email ?? `id${p.user_id}@vk.ru`, name: p.name, provider: "vk" };
-      }
-      // 2) сессия email/пароль
-      if (!u) u = restoreSession();
-
-      if (u) {
-        const acc = loadAccountData(u.id);
-        if (acc) setData(acc.data);
-        resetModifiedFlag();
-        cloudLoadData(u.id).then((cloud) => {
-          if (!cancelled && cloud) setData(cloud);
-        });
-      }
-      setUser(u);
-      setBooting(false);
-    })();
-    return () => { cancelled = true; };
+    const u = getSessionUser();
+    if (u) {
+      const d = loadUserData(u.nick);
+      if (d) setData(d);
+    }
+    setUser(u);
+    setBooting(false);
   }, []);
 
-  // автосохранение: локально + в «облако» аккаунта + Supabase (если настроен)
+  // автосохранение: глобально + под ником пользователя
   useEffect(() => {
     saveState(data);
-    if (user) {
-      saveAccountData(user.id, data);
-      cloudSaveData(user.id, data);
-    }
+    if (user) saveUserData(user.nick, data);
   }, [data, user]);
 
-  /** единая функция входа: ВК и email/пароль попадают сюда */
-  const handleLoginSuccess = useCallback((u: SessionUser, merged?: AppData) => {
+  /** успешный вход / регистрация из AuthScreen */
+  const handleAuthed = useCallback((u: User, d: AppData) => {
     setUser(u);
+    setData(d);
     resetModifiedFlag();
-    if (merged) setData(merged);
-    else {
-      const acc = loadAccountData(u.id);
-      if (acc) setData(acc.data);
-      else setData(createFreshState());
-    }
-    cloudLoadData(u.id).then((cloud) => {
-      if (cloud && !merged) setData(cloud);
-    });
   }, []);
 
   const handleLogout = useCallback(() => {
-    if (user) saveAccountData(user.id, data);
+    if (user) saveUserData(user.nick, data);
     signOut();
-    clearVkSession();
     setUser(null);
     setData(createFreshState());
     resetModifiedFlag();
@@ -292,7 +245,7 @@ export default function App() {
   /* ------- рендер ------- */
 
   if (booting) return <Splash />;
-  if (!user) return <AuthScreen localData={data} onDone={handleLoginSuccess} vkError={vkBootError} />;
+  if (!user) return <AuthScreen onAuthed={handleAuthed} />;
 
   return (
     <div className="min-h-dvh">
@@ -322,7 +275,7 @@ export default function App() {
             </button>
           ))}
           <div className="mt-auto rounded-xl border border-line bg-card p-3 text-[11px] leading-relaxed text-faint">
-            {user.name ?? user.email} · вход через {PROVIDER_LABEL[user.provider]}
+            Вы вошли как <b className="text-soft">@{user.nick}</b>
           </div>
         </aside>
 
@@ -395,7 +348,7 @@ export default function App() {
                   }}
                   statsVisibility={data.statsVisibility}
                   onToggleStat={toggleStatBlock}
-                  account={{ user, providerLabel: PROVIDER_LABEL[user.provider], onLogout: handleLogout }}
+                  account={{ user, onLogout: handleLogout }}
                 />
               )}
             </div>
