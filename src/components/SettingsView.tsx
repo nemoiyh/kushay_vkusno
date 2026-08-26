@@ -1,8 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { AppData, Goals, Profile, StatsBlockKey } from "../types";
-import { fmt } from "../lib/store";
 import type { User } from "../lib/auth";
-import { FOODS } from "../data/foods";
 import { GoalsView } from "./GoalsView";
 import {
   IApple, IChevL, IChevR, IChart, IDrop, IFlame, IFoot, ILogout, IMoon, IRuler, IScale, ISettings, ITarget,
@@ -46,7 +44,7 @@ export function SettingsView({
   onReset: () => void;
   statsVisibility: AppData["statsVisibility"];
   onToggleStat: (id: StatsBlockKey) => void;
-  account: { user: User; onLogout: () => void };
+  account: { user: User; cloud: boolean; onLogout: () => void };
 }) {
   const [screen, setScreen] = useState<Screen>("menu");
 
@@ -106,15 +104,7 @@ export function SettingsView({
       ) : (
         <SubScreen title="Приложение" onBack={() => setScreen("menu")} subtitle="Аккаунт и синхронизация">
           <div className="max-w-2xl">
-            <AccountCard user={account.user} onLogout={account.onLogout} />
-            <div className="card mt-5 p-5">
-              <h3 className="font-display text-[13px] font-bold">О приложении</h3>
-              <ul className="mt-3 space-y-2 text-sm text-soft">
-                <li>Каталог — {fmt(FOODS.length)} продуктов, включая «Перекрёсток»</li>
-                <li>Данные хранятся локально на вашем устройстве</li>
-                <li>Работает офлайн после первого открытия</li>
-              </ul>
-            </div>
+            <AccountCard user={account.user} cloud={account.cloud} onLogout={account.onLogout} />
           </div>
         </SubScreen>
       )}
@@ -172,7 +162,7 @@ function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; labe
   );
 }
 
-function AccountCard({ user, onLogout }: { user: User; onLogout: () => void }) {
+function AccountCard({ user, cloud, onLogout }: { user: User; cloud: boolean; onLogout: () => void }) {
   const [confirm, setConfirm] = useState(false);
   useEffect(() => {
     if (!confirm) return;
@@ -192,12 +182,23 @@ function AccountCard({ user, onLogout }: { user: User; onLogout: () => void }) {
         </span>
         <div className="min-w-0">
           <div className="truncate text-sm font-bold">@{user.nick}</div>
-          <div className="mt-0.5 text-[11px] text-faint">Локальный аккаунт</div>
+          <div className="mt-1 flex items-center gap-1.5">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                cloud ? "bg-leafwash text-leafdeep" : "bg-paper text-faint"
+              }`}
+            >
+              <span className={`size-1.5 rounded-full ${cloud ? "bg-leaf" : "bg-faint"}`} />
+              {cloud ? "Облачный аккаунт" : "Локальный аккаунт"}
+            </span>
+          </div>
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-[11px] leading-snug text-faint">
-          Данные хранятся в этом браузере под вашим ником и откроются при следующем входе.
+          {cloud
+            ? "Данные синхронизированы и доступны на всех ваших устройствах."
+            : "Данные хранятся в этом браузере под вашим ником и откроются при следующем входе."}
         </p>
         <button
           onClick={doLogout}
