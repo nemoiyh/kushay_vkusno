@@ -9,6 +9,7 @@ import {
 } from "./lib/store";
 import { logout, watchAuth, type User } from "./lib/auth";
 import { useDiarySync } from "./lib/useDiarySync";
+import { getDbSafe } from "./firebase";
 import { ErrorBoundary, ToastStack } from "./components/ui";
 import { IApple, IBook, IChart, IFlame, ISettings, LogoMark } from "./components/Icons";
 import { DiaryView } from "./components/DiaryView";
@@ -337,7 +338,7 @@ export default function App() {
                   }}
                   statsVisibility={data.statsVisibility}
                   onToggleStat={toggleStatBlock}
-                  account={{ user, onLogout: handleLogout }}
+                  account={{ user, cloud: !!getDbSafe(), onLogout: handleLogout }}
                 />
               )}
             </div>
