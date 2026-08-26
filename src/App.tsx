@@ -11,7 +11,8 @@ import {
   PROVIDER_LABEL, loadAccountData, restoreSession, saveAccountData, signOut, type SessionUser,
 } from "./lib/auth";
 import {
-  clearVkSession, consumeVkOAuthCallback, consumeVkOAuthError, getVkProfile, hasVkSession, saveVkSession,
+  clearVkSession, consumeVkOAuthCallback, consumeVkOAuthError, getVkProfile, hasVkSession,
+  saveVkSession, takeVkCallbackError,
 } from "./lib/vkid";
 import { cloudLoadData, cloudSaveData } from "./lib/supabase";
 import { ErrorBoundary, ToastStack } from "./components/ui";
@@ -52,6 +53,9 @@ export default function App() {
       // 0) возврат из VK (в URL есть code) — обмениваем и входим
       const vkData = await consumeVkOAuthCallback();
       if (cancelled) return;
+      // если обмен code→токены не удался — показываем сообщение на экране входа
+      const cbErr = takeVkCallbackError();
+      if (cbErr) setVkBootError(cbErr);
       let u: SessionUser | null = null;
       if (vkData) {
         const p = saveVkSession(vkData);

@@ -97,15 +97,19 @@ function randState(): string {
   return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Адрес авторизации VK ID (low-code / callback). Только штатные параметры —
- *  лишние (например дублирующий state) VK может отклонить ошибкой загрузки. */
+/** Классический OAuth-адрес авторизации VK ID (code flow).
+ *  id.vk.com/authorize требует client_id — НЕ app_id, иначе
+ *  {message: 'client_id is missing', code: 'invalid_request'}.
+ *  Правильный вид:
+ *  https://id.vk.com/authorize?client_id=...&redirect_uri=...&response_type=code&scope=email */
 export function buildAuthorizeUrl(state: string): string {
   const p = new URLSearchParams({
-    app_id: String(APP_ID),
+    client_id: String(APP_ID),
     redirect_uri: REDIRECT_URL,
-    redirect_state: state,
-    response_mode: "callback",
+    response_type: "code",
     scope: "email",
+    // возвращаемый VK state — защита от подмены при возврате
+    redirect_state: state,
   });
   return `https://id.vk.com/authorize?${p.toString()}`;
 }
@@ -239,8 +243,19 @@ export async function consumeVkOAuthCallback(): Promise<VkTokenResponse | null> 
   if (expected && state && state !== expected) return null;
 
   const VKID = await loadSdk();
-  if (!VKID || !deviceId) return null;
+  if (!VKID) {
+    lastCallbackError = "Не удалось загрузить VK ID SDK — проверьте интернет и попробуйте ещё раз.";
+    return null;
+  }
   initConfig(VKID);
+  if (!deviceId) {
+    // классический code-flow возвращает только code: без device_id SDK-обмен
+    // невозможен — показываем пользователю понятное сообщение, а не тихий
+    // возврат на экран входа
+    lastCallbackError =
+      "ВКонтакте вернул код, но обмен не удался. Нажмите «Войти через ВКонтакте» ещё раз или войдите по Email.";
+    return null;
+  }
 
   try {
     const data = await VKID.Auth.exchangeCode(code, deviceId);
@@ -257,6 +272,16 @@ export async function consumeVkOAuthCallback(): Promise<VkTokenResponse | null> 
     // Полный редирект — входим прямо в этом окне
     return data;
   } catch {
+    lastCallbackError = "Не удалось обменять код на токен. Попробуйте войти ещё раз.";
     return null;
   }
+}
+
+let lastCallbackError: string | null = null;
+
+/** Забрать (и очистить) ошибку последней попытки обмена code→токены. */
+export function takeVkCallbackError(): string | null {
+  const e = lastCallbackError;
+  lastCallbackError = null;
+  return e;
 }
