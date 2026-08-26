@@ -4,17 +4,11 @@ import type {
   SleepEntry, StatsBlockKey, ToastItem, ToastKind, View,
 } from "./types";
 import {
-  STORAGE_KEY, createFreshState, defaultMealByHour, entryFromFood, fmt, loadState, mealLabel,
+  createFreshState, defaultMealByHour, entryFromFood, fmt, mealLabel,
   recipeTotals, resetModifiedFlag, round1, ru1, saveState, shiftKey, streakDays, todayKey, uid, upsertByDate,
 } from "./lib/store";
-import {
-  PROVIDER_LABEL, loadAccountData, restoreSession, saveAccountData, signOut, type SessionUser,
-} from "./lib/auth";
-import {
-  clearVkSession, consumeVkOAuthCallback, consumeVkOAuthError, getVkProfile, hasVkSession,
-  saveVkSession, takeVkCallbackError,
-} from "./lib/vkid";
-import { cloudLoadData, cloudSaveData } from "./lib/supabase";
+import { logout, watchAuth, type User } from "./lib/auth";
+import { useDiarySync } from "./lib/useDiarySync";
 import { ErrorBoundary, ToastStack } from "./components/ui";
 import { IApple, IBook, IChart, IFlame, ISettings, LogoMark } from "./components/Icons";
 import { DiaryView } from "./components/DiaryView";
@@ -32,90 +26,38 @@ const NAV: { id: View; label: string; icon: typeof IBook }[] = [
 ];
 
 export default function App() {
-  const [data, setData] = useState<AppData>(loadState);
   const [view, setView] = useState<View>("diary");
   const [dayKey, setDayKey] = useState(todayKey());
   const [draft, setDraft] = useState<(EntryDraftInput & { dateKey: string; ts: number }) | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  /* ------- аккаунт: сессия, «облако», выход ------- */
-  const [user, setUser] = useState<SessionUser | null>(null);
+  /* ------- аккаунт: Firebase Auth (ник + пароль) ------- */
+  const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
-  const [vkBootError, setVkBootError] = useState<string | null>(null);
 
-  // при старте: обрабатываем возврат из VK OAuth, затем проверяем сессию
+  // при старте: подписываемся на Firebase — вошёл → приложение, не вошёл → лендинг
   useEffect(() => {
-    let cancelled = false;
-    // если ВК вернул ошибку (Redirect URI не совпал, вход отменён и т.п.) —
-    // показываем понятное сообщение вместо белого экрана
-    setVkBootError(consumeVkOAuthError());
-    (async () => {
-      // 0) возврат из VK (в URL есть code) — обмениваем и входим
-      const vkData = await consumeVkOAuthCallback();
-      if (cancelled) return;
-      // если обмен code→токены не удался — показываем сообщение на экране входа
-      const cbErr = takeVkCallbackError();
-      if (cbErr) setVkBootError(cbErr);
-      let u: SessionUser | null = null;
-      if (vkData) {
-        const p = saveVkSession(vkData);
-        u = { id: `vk-${p.user_id}`, email: p.email ?? `id${p.user_id}@vk.ru`, name: p.name, provider: "vk" };
-      }
-      // 1) активная сессия VK ID
-      if (!u && hasVkSession()) {
-        const p = getVkProfile();
-        if (p) u = { id: `vk-${p.user_id}`, email: p.email ?? `id${p.user_id}@vk.ru`, name: p.name, provider: "vk" };
-      }
-      // 2) сессия email/пароль
-      if (!u) u = restoreSession();
-
-      if (u) {
-        const acc = loadAccountData(u.id);
-        if (acc) setData(acc.data);
-        resetModifiedFlag();
-        cloudLoadData(u.id).then((cloud) => {
-          if (!cancelled && cloud) setData(cloud);
-        });
-      }
+    const unsubscribe = watchAuth((u) => {
       setUser(u);
       setBooting(false);
-    })();
-    return () => { cancelled = true; };
+    });
+    return unsubscribe;
   }, []);
 
-  // автосохранение: локально + в «облако» аккаунта + Supabase (если настроен)
+  // данные дневника: живая синхронизация с Firestore (+ локальный резерв)
+  const [data, setData] = useDiarySync(user);
+
+  // локальный офлайн-резерв (для PWA без сети)
   useEffect(() => {
     saveState(data);
-    if (user) {
-      saveAccountData(user.id, data);
-      cloudSaveData(user.id, data);
-    }
-  }, [data, user]);
-
-  /** единая функция входа: ВК и email/пароль попадают сюда */
-  const handleLoginSuccess = useCallback((u: SessionUser, merged?: AppData) => {
-    setUser(u);
-    resetModifiedFlag();
-    if (merged) setData(merged);
-    else {
-      const acc = loadAccountData(u.id);
-      if (acc) setData(acc.data);
-      else setData(createFreshState());
-    }
-    cloudLoadData(u.id).then((cloud) => {
-      if (cloud && !merged) setData(cloud);
-    });
-  }, []);
+  }, [data]);
 
   const handleLogout = useCallback(() => {
-    if (user) saveAccountData(user.id, data);
-    signOut();
-    clearVkSession();
+    void logout().catch(() => {});
     setUser(null);
-    setData(createFreshState());
     resetModifiedFlag();
     setView("diary");
-  }, [user, data]);
+  }, []);
 
   const toast = useCallback((text: string, kind: ToastKind = "success") => {
     const id = uid();
@@ -292,7 +234,7 @@ export default function App() {
   /* ------- рендер ------- */
 
   if (booting) return <Splash />;
-  if (!user) return <AuthScreen localData={data} onDone={handleLoginSuccess} vkError={vkBootError} />;
+  if (!user) return <AuthScreen />;
 
   return (
     <div className="min-h-dvh">
@@ -322,7 +264,7 @@ export default function App() {
             </button>
           ))}
           <div className="mt-auto rounded-xl border border-line bg-card p-3 text-[11px] leading-relaxed text-faint">
-            {user.name ?? user.email} · вход через {PROVIDER_LABEL[user.provider]}
+            Вы вошли как <b className="text-soft">@{user.nick}</b>
           </div>
         </aside>
 
@@ -395,7 +337,7 @@ export default function App() {
                   }}
                   statsVisibility={data.statsVisibility}
                   onToggleStat={toggleStatBlock}
-                  account={{ user, providerLabel: PROVIDER_LABEL[user.provider], onLogout: handleLogout }}
+                  account={{ user, onLogout: handleLogout }}
                 />
               )}
             </div>

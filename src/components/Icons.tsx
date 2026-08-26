@@ -116,6 +116,9 @@ export const IChefHat = (p: P) => (
 export const ICloudCheck = (p: P) => (
   <svg {...base(p)}><path d="M17.5 19a4.5 4.5 0 0 0 .42-8.98 7 7 0 0 0-13.6 1.9A4 4 0 0 0 6 19h11.5z" /><polyline points="9 13 11.5 15.5 15.5 11" /></svg>
 );
+export const IUser = (p: P) => (
+  <svg {...base(p)}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+);
 export const IMail = (p: P) => (
   <svg {...base(p)}><rect x="2" y="4" width="20" height="16" rx="2" /><polyline points="22,6 12,13 2,6" /></svg>
 );
@@ -134,11 +137,7 @@ export const IUserIcon = (p: P) => (
 export const ILogout = (p: P) => (
   <svg {...base(p)}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
 );
-export const IVk = (p: P) => (
-  <svg {...base({ ...p, fill: "currentColor", stroke: "none" })}>
-    <path d="M13.02 17.55c-5.9 0-9.27-4.04-9.41-10.78h2.95c.09 4.96 2.27 7.05 3.99 7.48V6.77h2.78v4.23c1.7-.18 3.48-2.11 4.08-4.23h2.77c-.46 2.6-2.4 4.53-3.77 5.32 1.37.64 3.58 2.32 4.42 5.46h-3.05c-.66-2.04-2.29-3.61-4.45-3.83v3.83h-.31z" />
-  </svg>
-);
+
 
 /** Логотип: вилка-лист на плашке цвета морской волны */
 export function LogoMark({ size = 36 }: { size?: number }) {
