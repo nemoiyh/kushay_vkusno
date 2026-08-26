@@ -4,12 +4,11 @@ import type {
   SleepEntry, StatsBlockKey, ToastItem, ToastKind, View,
 } from "./types";
 import {
-  STORAGE_KEY, createFreshState, defaultMealByHour, entryFromFood, fmt, loadState, mealLabel,
+  createFreshState, defaultMealByHour, entryFromFood, fmt, mealLabel,
   recipeTotals, resetModifiedFlag, round1, ru1, saveState, shiftKey, streakDays, todayKey, uid, upsertByDate,
 } from "./lib/store";
-import {
-  getSessionUser, loadUserData, saveUserData, signOut, type User,
-} from "./lib/auth";
+import { logout, watchAuth, type User } from "./lib/auth";
+import { useDiarySync } from "./lib/useDiarySync";
 import { ErrorBoundary, ToastStack } from "./components/ui";
 import { IApple, IBook, IChart, IFlame, ISettings, LogoMark } from "./components/Icons";
 import { DiaryView } from "./components/DiaryView";
@@ -27,48 +26,38 @@ const NAV: { id: View; label: string; icon: typeof IBook }[] = [
 ];
 
 export default function App() {
-  const [data, setData] = useState<AppData>(loadState);
   const [view, setView] = useState<View>("diary");
   const [dayKey, setDayKey] = useState(todayKey());
   const [draft, setDraft] = useState<(EntryDraftInput & { dateKey: string; ts: number }) | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  /* ------- аккаунт: сессия «ник + пароль», выход ------- */
+  /* ------- аккаунт: Firebase Auth (ник + пароль) ------- */
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
 
-  // при старте: если в kv_session есть ник — сразу показываем приложение
+  // при старте: подписываемся на Firebase — вошёл → приложение, не вошёл → лендинг
   useEffect(() => {
-    const u = getSessionUser();
-    if (u) {
-      const d = loadUserData(u.nick);
-      if (d) setData(d);
-    }
-    setUser(u);
-    setBooting(false);
+    const unsubscribe = watchAuth((u) => {
+      setUser(u);
+      setBooting(false);
+    });
+    return unsubscribe;
   }, []);
 
-  // автосохранение: глобально + под ником пользователя
+  // данные дневника: живая синхронизация с Firestore (+ локальный резерв)
+  const [data, setData] = useDiarySync(user);
+
+  // локальный офлайн-резерв (для PWA без сети)
   useEffect(() => {
     saveState(data);
-    if (user) saveUserData(user.nick, data);
-  }, [data, user]);
-
-  /** успешный вход / регистрация из AuthScreen */
-  const handleAuthed = useCallback((u: User, d: AppData) => {
-    setUser(u);
-    setData(d);
-    resetModifiedFlag();
-  }, []);
+  }, [data]);
 
   const handleLogout = useCallback(() => {
-    if (user) saveUserData(user.nick, data);
-    signOut();
+    void logout().catch(() => {});
     setUser(null);
-    setData(createFreshState());
     resetModifiedFlag();
     setView("diary");
-  }, [user, data]);
+  }, []);
 
   const toast = useCallback((text: string, kind: ToastKind = "success") => {
     const id = uid();
@@ -245,7 +234,7 @@ export default function App() {
   /* ------- рендер ------- */
 
   if (booting) return <Splash />;
-  if (!user) return <AuthScreen onAuthed={handleAuthed} />;
+  if (!user) return <AuthScreen />;
 
   return (
     <div className="min-h-dvh">

@@ -5,7 +5,18 @@ import {
   signOut as fbSignOut,
   updateProfile,
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { getAuthSafe } from "../firebase";
+
+/**
+ * Единая точка получения Auth. Если Firebase недоступен в этой среде —
+ * бросаем AuthError с понятным сообщением вместо падения приложения.
+ */
+function requireAuth() {
+  const a = getAuthSafe();
+  if (!a)
+    throw new AuthError("bad-input", "Сервис входа временно недоступен. Попробуйте позже.");
+  return a;
+}
 
 /**
  * Аутентификация «Кушай вкусно» — только «ник + пароль», поверх Firebase Auth.
@@ -89,7 +100,13 @@ function mapAuthError(e: unknown): AuthError {
  * Вызывается при старте и при каждом входе/выходе. Возвращает функцию отписки.
  */
 export function watchAuth(cb: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, (fbUser) => {
+  const a = getAuthSafe();
+  // Firebase недоступен — считаем, что никто не вошёл, и не падаем.
+  if (!a) {
+    cb(null);
+    return () => {};
+  }
+  return onAuthStateChanged(a, (fbUser) => {
     if (fbUser) {
       cb({ uid: fbUser.uid, nick: nickOf(fbUser.displayName, fbUser.email) });
     } else {
@@ -100,7 +117,7 @@ export function watchAuth(cb: (user: User | null) => void): () => void {
 
 /** Выход из аккаунта. */
 export function logout(): Promise<void> {
-  return fbSignOut(auth);
+  return fbSignOut(requireAuth());
 }
 
 /* ---------- регистрация / вход ---------- */
@@ -111,8 +128,9 @@ export function logout(): Promise<void> {
  */
 export async function signup(nick: string, password: string): Promise<User> {
   const n = validate(nick, password);
+  const a = requireAuth();
   try {
-    const cred = await createUserWithEmailAndPassword(auth, nickToEmail(n), password);
+    const cred = await createUserWithEmailAndPassword(a, nickToEmail(n), password);
     await updateProfile(cred.user, { displayName: n });
     return { uid: cred.user.uid, nick: n };
   } catch (e) {
@@ -126,8 +144,9 @@ export async function signup(nick: string, password: string): Promise<User> {
  */
 export async function signin(nick: string, password: string): Promise<User> {
   const n = validate(nick, password);
+  const a = requireAuth();
   try {
-    const cred = await signInWithEmailAndPassword(auth, nickToEmail(n), password);
+    const cred = await signInWithEmailAndPassword(a, nickToEmail(n), password);
     return { uid: cred.user.uid, nick: nickOf(cred.user.displayName, cred.user.email) };
   } catch (e) {
     throw mapAuthError(e);

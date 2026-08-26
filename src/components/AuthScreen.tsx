@@ -1,10 +1,9 @@
 import { useState } from "react";
-import type { AppData } from "../types";
-import { AuthError, signin, signup, type User } from "../lib/auth";
+import { AuthError, signin, signup } from "../lib/auth";
 import { Ring } from "./ui";
 import { ICheck, IEye, IEyeOff, ILock, IUser, LogoMark } from "./Icons";
 
-export function AuthScreen({ onAuthed }: { onAuthed: (user: User, data: AppData) => void }) {
+export function AuthScreen() {
   return (
     <div className="relative min-h-dvh overflow-hidden">
       <div className="pointer-events-none absolute inset-0" aria-hidden>
@@ -71,11 +70,11 @@ export function AuthScreen({ onAuthed }: { onAuthed: (user: User, data: AppData)
         {/* карточка входа */}
         <section className="w-full max-w-md">
           <div className="card hard-sm p-6 sm:p-7">
-            <AuthForm onAuthed={onAuthed} />
+            <AuthForm />
           </div>
           <p className="mt-4 text-center text-[11px] leading-relaxed text-faint">
-            Аккаунт и данные хранятся локально в вашем браузере. Пароль не передаётся никуда и
-            сохраняется только в виде хэша.
+            Аккаунт и дневник синхронизируются с облаком — данные доступны на всех ваших
+            устройствах. Пароль хранится только в зашифрованном виде.
           </p>
         </section>
       </div>
@@ -87,7 +86,7 @@ export function AuthScreen({ onAuthed }: { onAuthed: (user: User, data: AppData)
 
 type Tab = "login" | "register";
 
-function AuthForm({ onAuthed }: { onAuthed: (user: User, data: AppData) => void }) {
+function AuthForm() {
   const [tab, setTab] = useState<Tab>("login");
   const [nick, setNick] = useState("");
   const [password, setPassword] = useState("");
@@ -99,8 +98,10 @@ function AuthForm({ onAuthed }: { onAuthed: (user: User, data: AppData) => void 
     setError(null);
     setBusy(true);
     try {
-      const data = tab === "register" ? await signup(nick, password) : await signin(nick, password);
-      onAuthed({ nick: nick.trim().toLowerCase() }, data);
+      // Успешный вход/регистрация: Firebase сам уведомит приложение через
+      // onAuthStateChanged, данные дневника подтянет синхронизация.
+      if (tab === "register") await signup(nick, password);
+      else await signin(nick, password);
     } catch (e) {
       setError(e instanceof AuthError ? e.message : "Что-то пошло не так. Попробуйте ещё раз.");
     } finally {

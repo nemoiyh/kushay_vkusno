@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { getDbSafe } from "../firebase";
 import type { AppData } from "../types";
 import type { User } from "./auth";
-import { STORAGE_KEY, defaultStatsVisibility, emptyState } from "./store";
+import { STORAGE_KEY, defaultStatsVisibility, emptyState, loadState } from "./store";
 
 /**
  * Синхронизация дневника с Firestore.
@@ -75,8 +75,19 @@ export function useDiarySync(user: User | null): [AppData, Dispatch<SetStateActi
       return;
     }
 
+    const firestore = getDbSafe();
+
+    // Firebase недоступен в этой среде — работаем на локальных данных,
+    // чтобы приложение не упало в белый экран.
+    if (!firestore) {
+      lastWritten.current = "";
+      hydrated.current = true;
+      setData(readLocalMigration(nick) ?? loadState());
+      return;
+    }
+
     let cancelled = false;
-    const ref = doc(db, "users", uid);
+    const ref = doc(firestore, "users", uid);
     hydrated.current = false;
 
     // начальная загрузка + миграция локальных данных при первом входе
@@ -138,10 +149,12 @@ export function useDiarySync(user: User | null): [AppData, Dispatch<SetStateActi
     if (!uid || !hydrated.current) return;
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
+      const firestore = getDbSafe();
+      if (!firestore) return; // Firebase недоступен — пропускаем запись
       const str = JSON.stringify(data);
       if (str === lastWritten.current) return; // ничего не изменилось
       lastWritten.current = str;
-      setDoc(doc(db, "users", uid), { data }, { merge: true }).catch(() => {
+      setDoc(doc(firestore, "users", uid), { data }, { merge: true }).catch(() => {
         /* офлайн — Firestore допишет при появлении сети */
       });
     }, SAVE_DEBOUNCE_MS);
